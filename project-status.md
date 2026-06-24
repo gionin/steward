@@ -58,6 +58,16 @@ When confirmation lands, an item leaves the backlog: a genuinely new capability 
 
 7. **Product language.** Spotted. The user works in Portuguese and English. Decide whether the product operates bilingually or in one language. Likely bilingual; confirm.
 
+### Raised in the 2026-06-24 daily-use review
+
+Five adoption blockers the lead designer named before committing to daily use. Higher priority than the deferred AI layer below; numbered 15–17 only because item numbers are stable references (container deletion is already item 4). Items 4, 15, and 16 are the proposed next build batch — no design decisions, engine support already exists; item 17 wants a design pass first.
+
+15. **Add containers with the same "+" affordance as tasks and routines.** Spotted. Containers are added through a separate "New area" form at the bottom of the Containers view (a name field plus an "Add container" button), inconsistent with the inline "+ add routine" affordance and the task "+". Replace it with the same inline "+ add container" pattern so adding an area matches adding a task or routine. UI-only; the `add_container` bridge command already exists.
+
+16. **Data peace-of-mind: show where the data lives, and one-click backup.** Spotted. State is a single SQLite file at `~/.steward/steward.db` (on the lead designer's machine, `C:\Users\Pichau\.steward\steward.db`) — outside the project folder and the repo. The app never shows this, which feeds a fear of losing everything. Surface the exact path in Settings, add an "open data folder" affordance, and add a one-click "Back up database now" that copies the live file to a timestamped `.db` (the existing context export is AI text, not a backup). Needs a small bridge method to copy the file; the rest is UI.
+
+17. **Today as a navigable single-day lens; History as the calendar (one shared day model).** Spotted (design). Today and History already read the same `day_log` — Today renders `currentDate`, History renders the frozen past. The ask: Today shows the date with prev/next buttons to move day to day, and History becomes a calendar over the same data, so the two are one-to-one; and the blunt "Start new day →" (a mis-click jumps forward with no way back) is retired. Crux to settle first: the engine invariant is "the live day re-syncs; past days are frozen" (`sync_day` must never run on a past day), yet `_snapshot` currently syncs whatever day it is handed — so backward navigation needs a defined notion of "the live day" and a rule for whether a past day is editable from the Today lens or only in History. Covers the review points "Start new day is weak" and "Today and History should be in sync." A prev/next pair also makes an accidental advance a one-click undo.
+
 ### Deferred: the AI facilitation layer
 
 These sit on top of the deterministic core and are deferred behind the desktop build. They correspond to Architecture section 8.
@@ -106,6 +116,7 @@ These sit on top of the deterministic core and are deferred behind the desktop b
 - **Delete-containers UX** (item 4): the confirmation copy, how cascaded history is communicated, and whether an archive or close alternative sits beside outright deletion.
 - **Blessed container shapes** (item 6): whether to lock them now or after more design.
 - **Product language** (item 7).
+- **Today/History model** (item 17): what counts as "the live day," whether a past day is editable from the Today lens or only in History, and the prev/next interaction — settle before code, since it bears on the frozen-past-day invariant.
 - The shape and sequencing of the **AI facilitation layer** (items 8 to 14), once the deterministic desktop build is in hand.
 
 ---
@@ -121,6 +132,7 @@ Newest first. Each session appends what it advanced or decided.
 - Adopted a backlog lifecycle — **Spotted → Ready → Awaiting test → graduate** — and recorded it as the legend at the top of the Backlog. Migrated every item to it. Item numbers are kept as stable references.
 - Item 5 (Today drag-to-top bug): found the root cause — the reorder `dragover`/`drop` handlers sit only on the tight `#todayList` box, so a release above the first card falls outside it and is lost. Verified the index math and the engine commit path are correct for index 0. Fixed with a top catch strip on `#todayList` in `index.html`, and added a bridge regression check in `test_api.py` (reorder to index 0 → front, persists). Now **Awaiting test**: needs hands-on confirmation that the top drop registers.
 - Added a console-free Windows launch for daily use (the lead designer is adopting the app now): `run-quiet.vbs` starts the app via the venv's `pythonw.exe` so no console window appears, plus a pinnable `Steward` desktop shortcut to the same. `run.bat` stays for troubleshooting (it keeps a console to show crashes). Documented in `RUN.md`; noted under item 3. Login auto-start was offered and not set up. Awaiting confirmation that the shortcut launches cleanly.
+- Daily-use review: the lead designer named five adoption blockers. Confirmed the data is a single SQLite file at `~/.steward/steward.db`, outside the project and the repo (32 KB, already holding his test data). Registered the blockers — container delete (existing item 4), container "+" add (item 15), data peace-of-mind/backup (item 16), and the Today single-day-lens + History calendar model (item 17, design) — and proposed items 4/15/16 as the next build batch (no design decisions, engine support exists). Docs updated; no app code changed this turn.
 
 ### 2026-06-24
 
