@@ -431,19 +431,17 @@ function viewContainers(){
   const groups = order.map(st => {
     const cs = store.orderedContainers(st);
     const rows = cs.map(c => {
-      const sel = order.map(s => `<option value="${s}" ${s===c.status?"selected":""}>${label[s]}</option>`).join("");
       const mark = c.protected ? `<span class="protmark" title="Protected — can't be deleted">⚓</span>` : "";
-      return `<div class="crow" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname">${esc(c.name)}</span>${mark}
-        <span class="ccount">${c.taskCount} tasks · ${c.routineCount} routines</span></div><select data-cstatus="${c.id}">${sel}</select></div>`;
+      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname">${esc(c.name)}</span>${mark}
+        <span class="ccount">${c.taskCount} tasks · ${c.routineCount} routines</span></div>${c.protected?"":`<button class="iconbtn del" data-cdel="${c.id}" title="delete area">✕</button>`}</div>`;
     }).join("");
-    return `<div class="cgroup"><h3>${label[st]}</h3><div class="clist" data-cgroup="${st}">${rows||'<div class="cdrop">Drop a container here</div>'}</div></div>`;
+    const add = `<div class="raddrow"><button class="raddbtn" data-cadd="${st}">+ add container</button></div>`;
+    return `<div class="cgroup"><h3>${label[st]}</h3><div class="clist" data-cgroup="${st}">${rows||'<div class="cdrop">Drop a container here</div>'}</div>${add}</div>`;
   }).join("");
   return `
     <div class="head"><div><div class="eyebrow">Areas</div><h1 class="htitle">Containers</h1>
-      <div class="sub">Only active containers feed Today. Drag by the handle to reorder, or drag into another group to change a container's status. Misc (⚓) is always kept as a home for tasks.</div></div></div>
-    ${groups}
-    <div class="form" style="margin-top:18px"><div class="row"><label>New area</label><input type="text" id="cName" placeholder="Container name" style="flex:1">
-      <button class="btn primary sm" id="cAdd">Add container</button></div></div>`;
+      <div class="sub">Only active containers feed Today. Drag a container to reorder it, or into another group to change its status. Misc (⚓) is always kept as a home for tasks.</div></div></div>
+    ${groups}`;
 }
 
 /* ---------- History (editable) ---------- */
@@ -516,6 +514,12 @@ function viewSettings(){
       <div class="scard"><div class="srow"><div><div class="lbl">Show task positions in a single container</div>
         <div class="desc">When viewing one container's board, show each task's global position number. Off keeps it calmer.</div></div>
         <button class="toggle ${sp?"on":""}" id="posToggle"><span class="knob"></span></button></div></div>
+      <div class="ssection">Data</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Where your data lives</div>
+        <div class="desc">Your whole state is one SQLite file, kept outside this app's folder:<br><span id="dataPath" style="font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all">…</span></div></div>
+        <button class="btn sm" id="openFolderBtn">Open folder</button></div>
+        <div class="srow"><div><div class="lbl">Back up now</div><div class="desc">Save a timestamped copy of the database next to it. <span id="backupMsg"></span></div></div>
+        <button class="btn sm primary" id="backupBtn">Back up</button></div></div>
       <div class="ssection">About</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core.</div></div>
         <span class="sver">${esc(S.version)}</span></div></div>
@@ -682,9 +686,33 @@ function startDurEdit(el){
 }
 
 function wireContainers(){
-  document.querySelectorAll("[data-cstatus]").forEach(s => s.onchange = () => apply(api.set_container_status(s.dataset.cstatus, s.value, curKey())));
-  document.getElementById("cAdd").onclick = () => { const i = document.getElementById("cName"); const v = i.value.trim(); if (v) apply(api.add_container(v, curKey())); };
+  document.querySelectorAll("[data-cadd]").forEach(b => b.onclick = () => startAddContainer(b));
+  document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => deleteContainerPrompt(b.dataset.cdel));
   enableContainerDnD();
+}
+function startAddContainer(btn){
+  const st = btn.dataset.cadd || "active";
+  const inp = mkInput(""); btn.replaceWith(inp); inp.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.add_container(v, curKey(), st)); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+async function deleteContainerPrompt(id){
+  const c = store.containers[id]; if (!c) return;
+  const tn = c.taskCount || 0, rn = c.routineCount || 0;
+  let detail;
+  if (tn || rn) {
+    const parts = [];
+    if (tn) parts.push(`${tn} task${tn===1?"":"s"}`);
+    if (rn) parts.push(`${rn} routine${rn===1?"":"s"}`);
+    detail = `\n\nThis also permanently deletes its ${parts.join(" and ")} and all of their history. This cannot be undone.`;
+  } else {
+    detail = `\n\nThis cannot be undone.`;
+  }
+  if (!confirm(`Delete the "${c.name}" area?${detail}`)) return;
+  const res = await api.delete_container(id, curKey());
+  if (res && res.ok) { S = res.state; render(); }
 }
 
 function wireHistory(){
@@ -759,6 +787,17 @@ function wireHistory(){
 function wireSettings(){
   document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
   document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
+  const pathEl = document.getElementById("dataPath");
+  if (pathEl) api.data_location().then(d => { pathEl.textContent = (d && d.dbPath) || "(in memory)"; });
+  const ofb = document.getElementById("openFolderBtn"); if (ofb) ofb.onclick = () => api.open_data_folder();
+  const bb = document.getElementById("backupBtn");
+  if (bb) bb.onclick = async () => {
+    bb.disabled = true; const msg = document.getElementById("backupMsg");
+    if (msg) msg.textContent = "Backing up…";
+    const r = await api.backup_database();
+    if (msg) msg.textContent = (r && r.ok) ? ("Saved a copy: " + r.path) : "Backup failed.";
+    bb.disabled = false;
+  };
 }
 
 /* ---------- drag helpers (presentation only) ---------- */
@@ -820,9 +859,8 @@ function enableRoutineDnD(){
 let dragCont = null;
 function enableContainerDnD(){
   document.querySelectorAll(".crow").forEach(row => {
-    const grip = row.querySelector("[data-cgrip]"); if (grip) grip.addEventListener("mousedown", () => { row.draggable = true; });
     row.addEventListener("dragstart", e => { dragCont = row.dataset.cont; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
-    row.addEventListener("dragend", () => { row.draggable = false; dragCont = null; row.classList.remove("dragging"); clearPh(); });
+    row.addEventListener("dragend", () => { dragCont = null; row.classList.remove("dragging"); clearPh(); });
   });
   document.querySelectorAll("[data-cgroup]").forEach(list => {
     list.addEventListener("dragover", e => { e.preventDefault(); positionPh(list, e.clientY, ".crow"); });

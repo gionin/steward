@@ -85,6 +85,16 @@ class Api:
     def _save(self):
         storage.save(self.store, self.conn)
 
+    def _db_file(self):
+        """Absolute path of the live database file, or '' for an in-memory DB."""
+        try:
+            for _seq, name, fname in self.conn.execute("PRAGMA database_list"):
+                if name == "main":
+                    return fname or ""
+        except Exception:
+            pass
+        return ""
+
     # ----- snapshot -----
 
     def _resolve_item(self, it):
@@ -319,10 +329,13 @@ class Api:
 
     # ----- Containers -----
 
-    def add_container(self, name, today_key):
+    def add_container(self, name, today_key, status=None):
         name = (name or "").strip()
         if name:
-            self.store.add_container(name)
+            if status:
+                self.store.add_container(name, status)
+            else:
+                self.store.add_container(name)
         return self._snapshot(today_key)
 
     def set_container_status(self, container_id, status, today_key):
@@ -341,6 +354,48 @@ class Api:
     def delete_container(self, container_id, today_key):
         ok = self.store.delete_container(int(container_id))
         return {"ok": ok, "state": self._snapshot(today_key)}
+
+    # ----- data location / backup (item 16) -----
+
+    def data_location(self):
+        """Where the live SQLite state lives, for the Settings panel."""
+        path = self._db_file()
+        return {"dbPath": path, "folder": os.path.dirname(path) if path else ""}
+
+    def backup_database(self):
+        """Write a consistent, timestamped copy of the database beside it, using
+        SQLite's own backup so it is safe even mid-write. Returns the new path."""
+        import sqlite3
+        from datetime import datetime
+        src = self._db_file()
+        if not src:
+            return {"ok": False, "error": "no database file"}
+        dest = os.path.join(os.path.dirname(src),
+                            "steward-backup-" + datetime.now().strftime("%Y%m%d-%H%M%S") + ".db")
+        dst = sqlite3.connect(dest)
+        try:
+            self.conn.backup(dst)
+        finally:
+            dst.close()
+        return {"ok": True, "path": dest}
+
+    def open_data_folder(self):
+        """Open the data folder in the OS file manager (best effort)."""
+        folder = os.path.dirname(self._db_file())
+        if not folder or not os.path.isdir(folder):
+            return {"ok": False}
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(folder)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", folder])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", folder])
+        except Exception:
+            return {"ok": False}
+        return {"ok": True, "folder": folder}
 
     # ----- History -----
 

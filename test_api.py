@@ -123,6 +123,44 @@ def _reorder_today_to_top():
 check("bridge: reorder a Today item to index 0 moves it to the front and persists", _reorder_today_to_top)
 
 
+# ---- data location + backup (item 16) ----
+
+def _data_location_and_backup():
+    api, _ = fresh_api()
+    api.add_container("Work", kMON)
+
+    loc = api.data_location()
+    if not (loc["dbPath"] and os.path.exists(loc["dbPath"])):
+        raise AssertionError("data_location did not report an existing db file")
+
+    res = api.backup_database()
+    eq(res["ok"], True, "backup reports success")
+    if not os.path.exists(res["path"]):
+        raise AssertionError("backup file was not created")
+    # the copy is a real, complete database the app can reopen
+    bconn, bstore = storage.open_database(res["path"])
+    eq(sorted(c.name for c in bstore.containers.values()), ["Misc", "Work"],
+       "backup holds the same containers as the live database")
+    bconn.close()
+check("bridge: data_location reports the file and backup_database writes a reopenable copy", _data_location_and_backup)
+
+
+# ---- add a container directly into a status (the "+" on each section) ----
+
+def _add_container_with_status():
+    api, _ = fresh_api()
+    st = api.add_container("Someday", kMON, "planned")
+    c = next((c for c in st["containers"] if c["name"] == "Someday"), None)
+    if c is None:
+        raise AssertionError("container was not added")
+    eq(c["status"], "planned", "container created directly in the given status")
+    # the default (no status) is still active
+    st = api.add_container("Now", kMON)
+    c2 = next(c for c in st["containers"] if c["name"] == "Now")
+    eq(c2["status"], "active", "no status defaults to active")
+check("bridge: add_container honors an explicit status", _add_container_with_status)
+
+
 # ---- routines ----
 
 def _routines():
