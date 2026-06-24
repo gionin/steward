@@ -34,8 +34,8 @@ def eq(a, b, m=""):
 
 
 def fresh_api():
-    d = tempfile.mkdtemp(prefix="custodian_api_")
-    path = os.path.join(d, "custodian.db")
+    d = tempfile.mkdtemp(prefix="steward_api_")
+    path = os.path.join(d, "steward.db")
     conn, store = storage.open_database(path)
     return Api(conn, store), path
 

@@ -7,14 +7,14 @@ if [ ! -x ".venv/bin/python" ]; then
   exit 1
 fi
 
-echo "Starting Custodian...  (close the app window to come back here)"
+echo "Starting Steward...  (close the app window to come back here)"
 echo
 .venv/bin/python app.py
 
 echo
 echo "------------------------------------------------------------"
-echo "Custodian has exited."
+echo "Steward has exited."
 echo "If it crashed, the reason is shown above and saved in:"
-echo "   ~/.custodian/custodian.log"
+echo "   ~/.steward/steward.log"
 echo "------------------------------------------------------------"
 read -p "Press Enter to close."

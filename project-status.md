@@ -26,7 +26,7 @@ Framing rule: the system is deterministic first. The deterministic core is the p
 - **What is built:** The deterministic desktop application, confirmed launching and running on the lead designer's machine. Four layers, each covered by headless tests that were actually run:
   - `engine.py` — the engine ported from the authoritative preview (not the older `engine.mjs`, which lagged on routine ordering). `test_engine.py`: 19 checks, including the manual untimed-routine order the JS suite never tested, and the protected-container guard.
   - `storage.py` — SQLite persistence with a migration chain. `test_storage.py`: 4 checks (first-run state, full save/reload round-trip, and a real v1 to v2 upgrade that preserves legacy data).
-  - `app.py` — the pywebview bridge: `get_state` plus one command per UI action; structured logging to `~/.custodian/custodian.log`. `test_api.py`: 11 checks driving every command and a full database reopen.
+  - `app.py` — the pywebview bridge: `get_state` plus one command per UI action; structured logging to `~/.steward/steward.log`. `test_api.py`: 11 checks driving every command and a full database reopen.
   - `index.html` — the preview UI adapted to render from the bridge snapshot, preserving the dark-mode ledger aesthetic, kanban board, routines, today, editable history, drag-and-drop, dd/mm/yyyy, and the context export; with the version string in Settings and the Misc anchor icon added.
   - Supporting: `requirements.txt`, `RUN.md`, and double-click launchers (`setup`/`run` as `.bat` and `.command`).
 - **Verified vs asserted:** Engine, storage, and bridge are covered by passing headless tests that were run. The window, the bridge end to end, and the visual feel were asserted in the sandbox and then confirmed running on the lead designer's machine, where the logging surfaced a cross-thread SQLite error that was fixed. Packaging to a standalone executable is not yet done.
@@ -115,7 +115,7 @@ Newest first. Each session appends what it advanced or decided.
 - Added a protected Misc container as a deliberate deviation from the preview: undeletable so the project always keeps a home for tasks, renamable and reorderable, with a distinct anchor icon, guaranteed by the migration chain on both fresh installs and upgrades.
 - Adopted the version scheme: a display version `0.01.00a` shown in Settings (zero-padded segments, trailing letter per bug-fix attempt), kept separate from the integer schema version that drives migrations.
 - Flagged and resolved a discrepancy: the standalone `engine.mjs` lagged the preview, sorting untimed routines alphabetically where the preview and the prose use the manual routine order. Ported from the preview engine and added the routine-order test the JS suite was missing.
-- Added structured logging to `~/.custodian/custodian.log` and the console.
+- Added structured logging to `~/.steward/steward.log` and the console.
 - Confirmed the application launches and runs on the lead designer's machine. The logging immediately surfaced a cross-thread SQLite error (pywebview dispatches bridge calls on threads other than the one that opened the connection); fixed by opening the connection with `check_same_thread=False` and serializing every bridge call with a lock, and verified the cross-thread path headlessly.
 - Handed the project to Claude Code for continued build. Registered three backlog items: package to a standalone executable (item 3), expose and finalize container deletion (item 4), and a Today drag-to-top reorder bug (item 5).
 

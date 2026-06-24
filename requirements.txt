@@ -1,4 +1,4 @@
-# Custodian runtime dependency.
+# Steward runtime dependency.
 # The engine, storage, and every test suite use only the Python standard library.
 # pywebview is needed only to launch the desktop window (app.py).
 #

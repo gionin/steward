@@ -1,4 +1,4 @@
-"""Custodian desktop app: the pywebview bridge and entry point.
+"""Steward desktop app: the pywebview bridge and entry point.
 
 Architecture: Python owns the engine (engine.py) and the SQLite state
 (storage.py). The web UI renders from a snapshot and sends one command per user
@@ -451,7 +451,7 @@ class Api:
             return f"{d}/{m}/{y}"
 
         d = _date_from_key(today_key)
-        out = "CUSTODIAN - STATE EXPORT\n"
+        out = "STEWARD - STATE EXPORT\n"
         out += f"Generated for: {WEEKDAYS[d.weekday()]} {dmy(today_key)}\n\nTODAY'S SLICE\n"
         items = s.day_items(today_key)
         if items:
@@ -493,19 +493,19 @@ class Api:
 # Entry point (asserted; confirmed on the user's machine)
 # --------------------------------------------------------------------------
 
-def _custodian_home():
-    base = Path(os.environ.get("CUSTODIAN_HOME", Path.home() / ".custodian"))
+def _steward_home():
+    base = Path(os.environ.get("STEWARD_HOME", Path.home() / ".steward"))
     base.mkdir(parents=True, exist_ok=True)
     return base
 
 
 def _db_path():
-    return str(_custodian_home() / "custodian.db")
+    return str(_steward_home() / "steward.db")
 
 
 def _setup_logging():
     import logging
-    logfile = _custodian_home() / "custodian.log"
+    logfile = _steward_home() / "steward.log"
     fmt = logging.Formatter("%(asctime)s  %(levelname)-7s %(message)s")
     fh = logging.FileHandler(logfile, encoding="utf-8")
     fh.setFormatter(fmt)
@@ -520,9 +520,9 @@ def _setup_logging():
 def main():
     import logging
     logfile = _setup_logging()
-    log = logging.getLogger("custodian")
+    log = logging.getLogger("steward")
     log.info("=" * 60)
-    log.info("Custodian %s starting", APP_VERSION)
+    log.info("Steward %s starting", APP_VERSION)
     log.info("Log file: %s", logfile)
     log.info("Python: %s", sys.version.replace("\n", " "))
 
@@ -549,10 +549,10 @@ def main():
         log.info("UI file: %s", index)
 
         api = Api(conn, store)
-        debug = os.environ.get("CUSTODIAN_DEBUG") == "1"
+        debug = os.environ.get("STEWARD_DEBUG") == "1"
         log.info("Creating window (debug=%s)", debug)
         webview.create_window(
-            "Custodian", url=index, js_api=api,
+            "Steward", url=index, js_api=api,
             width=1180, height=820, min_size=(900, 600),
         )
         log.info("Opening window. Close it to quit.")
@@ -560,7 +560,7 @@ def main():
         log.info("Window closed. Goodbye.")
         conn.close()
     except Exception:
-        log.exception("Custodian failed to start")
+        log.exception("Steward failed to start")
         raise
 
 

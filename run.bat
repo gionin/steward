@@ -9,14 +9,14 @@ if not exist ".venv\Scripts\python.exe" (
   exit /b 1
 )
 
-echo Starting Custodian...  (close the app window to come back here)
+echo Starting Steward...  (close the app window to come back here)
 echo.
 .venv\Scripts\python app.py
 
 echo.
 echo ------------------------------------------------------------
-echo Custodian has exited.
+echo Steward has exited.
 echo If it crashed, the reason is shown above and saved in:
-echo    "%USERPROFILE%\.custodian\custodian.log"
+echo    "%USERPROFILE%\.steward\steward.log"
 echo ------------------------------------------------------------
 pause

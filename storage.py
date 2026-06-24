@@ -1,4 +1,4 @@
-"""SQLite persistence + schema migrations for the Custodian engine.
+"""SQLite persistence + schema migrations for the Steward engine.
 
 Design choices:
   - The database mirrors the in-memory Store exactly. `save` does a full

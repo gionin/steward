@@ -34,8 +34,8 @@ def eq(a, b, m=""):
         raise AssertionError(f"{m} expected {b!r}, got {a!r}")
 
 
-def _tmp(name="custodian.db"):
-    d = tempfile.mkdtemp(prefix="custodian_test_")
+def _tmp(name="steward.db"):
+    d = tempfile.mkdtemp(prefix="steward_test_")
     return os.path.join(d, name)
 
 

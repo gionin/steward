@@ -1,4 +1,4 @@
-# Custodian — running and verifying
+# Steward — running and verifying
 
 Deterministic core (task + routine manager). Python owns the engine and the
 SQLite state; the web UI renders from a snapshot and sends one command per
@@ -22,7 +22,7 @@ action across the pywebview bridge.
 First launch creates the database and seeds the single protected "Misc"
 container. By default the file lives at:
 
-    ~/.custodian/custodian.db        (override with the CUSTODIAN_HOME env var)
+    ~/.steward/steward.db        (override with the STEWARD_HOME env var)
 
 Your data persists across restarts and across app-version upgrades: a newer
 build opens an older database and migrates it forward without losing anything.

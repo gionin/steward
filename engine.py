@@ -1,4 +1,4 @@
-"""Custodian / Trusted-Offload Assistant - deterministic core engine (Python).
+"""Steward / Trusted-Offload Assistant - deterministic core engine (Python).
 
 Ported faithfully from the authoritative engine embedded in preview_12.html.
 This is a direct behavioural port; it does not redesign the model.

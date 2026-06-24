@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 echo ============================================
-echo   Custodian  -  setup (run this once)
+echo   Steward  -  setup (run this once)
 echo ============================================
 echo.
 

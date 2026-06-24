@@ -1,7 +1,7 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit 1
 echo "============================================"
-echo "  Custodian  -  setup (run this once)"
+echo "  Steward  -  setup (run this once)"
 echo "============================================"
 echo
 
