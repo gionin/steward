@@ -105,6 +105,24 @@ def _complete_and_persist():
 check("bridge: completing in Today hides from board and persists across reopen", _complete_and_persist)
 
 
+# ---- reorder to the very top (the "drag to top" path; idx 0) ----
+
+def _reorder_today_to_top():
+    api, path = fresh_api()
+    for n in ("Alpha", "Bravo", "Charlie"):
+        st = api.capture_task(n, kMON)
+    eq(names_today(st), ["Alpha", "Bravo", "Charlie"], "captured in order")
+    bottom = st["today"][2]["id"]
+    st = api.reorder_today_item(bottom, 0, kMON)        # drag the bottom item to the very top
+    eq(names_today(st), ["Charlie", "Alpha", "Bravo"], "reorder to index 0 moves the item to the front")
+
+    api.conn.close()                                    # and it survives a reopen
+    conn2, store2 = storage.open_database(path)
+    st2 = Api(conn2, store2).get_state(kMON)
+    eq(names_today(st2), ["Charlie", "Alpha", "Bravo"], "front reorder persisted across reopen")
+check("bridge: reorder a Today item to index 0 moves it to the front and persists", _reorder_today_to_top)
+
+
 # ---- routines ----
 
 def _routines():

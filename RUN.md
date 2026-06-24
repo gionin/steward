@@ -19,6 +19,19 @@ action across the pywebview bridge.
     python -m pip install -r requirements.txt      # Linux: pywebview[qt] or [gtk]
     python app.py
 
+### Day-to-day launch (Windows, no console window)
+
+`run.bat` keeps a console open to report crashes. For daily use, launch without
+one instead:
+
+    run-quiet.vbs        double-click; starts the app via the windowless
+                         pythonw.exe, so no console appears
+
+For a clickable/pinnable icon, there is a `Steward` shortcut on the Desktop that
+points at `.venv\Scripts\pythonw.exe app.py`; right-click it to pin to the
+taskbar or Start. Either way, startup and crash detail still land in the log
+below.
+
 First launch creates the database and seeds the single protected "Misc"
 container. By default the file lives at:
 

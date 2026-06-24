@@ -36,39 +36,45 @@ Framing rule: the system is deterministic first. The deterministic core is the p
 
 ## Backlog
 
-Ordered by priority and dependency. Status values: NEXT, OPEN, BLOCKED, DONE.
+Ordered by priority and dependency. Every item carries one lifecycle status:
 
-1. **Container weekday availability schedule.** NEXT (design). Top priority for the next design pass. Containers should carry a day-of-week schedule. Ready tasks in a container surface on the daily checklist automatically only on days that container is active per its weekday schedule (for example, "only work this project on Mondays"; "no work on weekends, but Home and Health still show up"). A manually added task overrides and always appears. This is distinct from the manual set-aside lifecycle state: it is automatic, recurring, per-weekday availability that feeds the daily draft. It is a genuine extension to the deterministic layer and wants its own design pass, including how it interacts with the lifecycle enum and the draft.
+- **Spotted** — identified and scoped; not yet being built. Covers raised bugs, pending design passes, and items blocked on a decision.
+- **Ready** — greenlit to build: the design is settled and nothing blocks the work.
+- **Awaiting test** — built and covered by passing headless tests; awaiting the lead designer's hands-on confirmation on a real run.
 
-2. **Desktop application build.** DONE. The Python engine was ported from the authoritative preview with its own passing test suite; SQLite persistence with a migration chain was added and tested; the pywebview bridge exposes `get_state` plus one command per action with its own headless tests; the preview UI now renders from the bridge snapshot, with the version string in Settings and the protected Misc container with its anchor icon. Verified by the three headless suites and confirmed launching and running on the lead designer's machine. Packaging is split out as item 3.
+When confirmation lands, an item leaves the backlog: a genuinely new capability is written up as a feature in the Project Architecture (or folds into an existing feature description); a fix to existing behaviour just drops off, since its feature is already documented. Item numbers are stable references used elsewhere in this document, so a closed item is marked graduated rather than renumbered.
 
-3. **Package the desktop app as a standalone executable.** NEXT (build). Bundle the Python runtime and the web view into one double-clickable artifact (PyInstaller or similar), per operating system, so the app runs without the setup and run scripts. The window, bridge, and persistence are already confirmed; this is the remaining piece of item 2. Known friction: the platform web-view runtime (Edge WebView2 on Windows, system WebKit on macOS, WebKitGTK or Qt on Linux), code-signing to avoid security warnings, and making sure `index.html` ships beside the bundled code.
+1. **Container weekday availability schedule.** Spotted (design). Top priority for the next design pass. Containers should carry a day-of-week schedule. Ready tasks in a container surface on the daily checklist automatically only on days that container is active per its weekday schedule (for example, "only work this project on Mondays"; "no work on weekends, but Home and Health still show up"). A manually added task overrides and always appears. This is distinct from the manual set-aside lifecycle state: it is automatic, recurring, per-weekday availability that feeds the daily draft. It is a genuine extension to the deterministic layer and wants its own design pass, including how it interacts with the lifecycle enum and the draft.
 
-4. **Delete containers.** OPEN. The engine already supports a guarded, cascading delete: a protected container refuses, and deleting a normal container removes its tasks, routines, and their day-log records. No interface affordance is exposed yet. Add the UI path and finalize the UX: the confirmation copy, what the user is told about cascaded history, and whether an archive or close alternative should be offered alongside outright deletion.
+2. **Desktop application build.** Done — graduated out of the backlog (built, tested, and documented: see the Snapshot, Architecture §7, and the 2026-06-24 session log). The Python engine was ported from the authoritative preview with its own passing test suite; SQLite persistence with a migration chain was added and tested; the pywebview bridge exposes `get_state` plus one command per action with its own headless tests; the preview UI now renders from the bridge snapshot, with the version string in Settings and the protected Misc container with its anchor icon. Verified by the three headless suites and confirmed launching and running on the lead designer's machine. Packaging is split out as item 3.
 
-5. **Bug: dragging an item to the top of Today's checklist does not register.** OPEN (bug). In the Today checklist, dropping a dragged item at the very top does not commit the reorder, while other drop positions work. Likely an insertion-index or drop-target edge case at index 0 in the reorder path (`enableListReorder` in `index.html`, `reorder_today_item` in `app.py`). Reproduce, fix, and add a regression check.
+3. **Package the desktop app as a standalone executable.** Ready (build). Bundle the Python runtime and the web view into one double-clickable artifact (PyInstaller or similar), per operating system, so the app runs without the setup and run scripts. The window, bridge, and persistence are already confirmed; this is the remaining piece of item 2. Known friction: the platform web-view runtime (Edge WebView2 on Windows, system WebKit on macOS, WebKitGTK or Qt on Linux), code-signing to avoid security warnings, and making sure `index.html` ships beside the bundled code. Interim, until this lands: a console-free Windows launch already exists — `run-quiet.vbs` and a pinnable `Steward` desktop shortcut, both via `pythonw.exe` (see `RUN.md`).
 
-6. **Blessed container shapes.** OPEN. Finalize the small sanctioned set of container patterns (for example, standing life-area and finite effort) that keeps the filing decision small and prevents organizational overhead.
+4. **Delete containers.** Spotted. The engine already supports a guarded, cascading delete: a protected container refuses, and deleting a normal container removes its tasks, routines, and their day-log records. No interface affordance is exposed yet. Add the UI path and finalize the UX: the confirmation copy, what the user is told about cascaded history, and whether an archive or close alternative should be offered alongside outright deletion.
 
-7. **Product language.** OPEN. The user works in Portuguese and English. Decide whether the product operates bilingually or in one language. Likely bilingual; confirm.
+5. **Bug: dragging an item to the top of Today's checklist does not register.** Awaiting test (bug). Root cause found: the `dragover`/`drop` handlers live only on `#todayList`, which has no top padding, so its box hugs the first card. A release aimed above the first card lands outside the box, where no handler exists, and the drop is lost; every other position sits inside the box and works. (The index math and the `reorder_today_item`/`sync_day` commit path were verified correct for index 0 — the board avoids the bug only because its handlers sit on the taller `.col`.) Fix: a top catch strip on `#todayList` (`padding-top:14px` in `index.html`) so a release just above the first card still lands in the list and maps to index 0. Added a bridge regression check that reordering a Today item to index 0 moves it to the front and persists (`test_api.py`). Awaiting the lead designer's confirmation on a real run that the top drop now registers; on confirmation this drops off the backlog (the Today drag-reorder feature is already documented).
+
+6. **Blessed container shapes.** Spotted. Finalize the small sanctioned set of container patterns (for example, standing life-area and finite effort) that keeps the filing decision small and prevents organizational overhead.
+
+7. **Product language.** Spotted. The user works in Portuguese and English. Decide whether the product operates bilingually or in one language. Likely bilingual; confirm.
 
 ### Deferred: the AI facilitation layer
 
 These sit on top of the deterministic core and are deferred behind the desktop build. They correspond to Architecture section 8.
 
-8. **Selection and suppression tuning.** OPEN. The AI selector's draft-and-comment behaviour, the light-day pull-forward from staging columns, and the suppression decision. Mechanics tunable by simulation; the felt quality validated only through real use with retained redundancy.
+8. **Selection and suppression tuning.** Spotted (deferred). The AI selector's draft-and-comment behaviour, the light-day pull-forward from staging columns, and the suppression decision. Mechanics tunable by simulation; the felt quality validated only through real use with retained redundancy.
 
-9. **Conversational touchpoints.** OPEN. Morning agreement, evening contrast, weekly reflection, and conversational capture, layered over the deterministic draft and check-off.
+9. **Conversational touchpoints.** Spotted (deferred). Morning agreement, evening contrast, weekly reflection, and conversational capture, layered over the deterministic draft and check-off.
 
-10. **Routine baseline and permissioned self-update.** OPEN. A canonical baseline of the normal week, maintained by manual audit and a directional self-update rule (add on a clear statement; ask before edit or remove).
+10. **Routine baseline and permissioned self-update.** Spotted (deferred). A canonical baseline of the normal week, maintained by manual audit and a directional self-update rule (add on a clear statement; ask before edit or remove).
 
-11. **Memory: remember/forget policy and index.** OPEN. The hardest case is the long tail of light tasks (unbounded growth, forgetting both valuable and dangerous). Criterion for every choice: does it increase trustable offload.
+11. **Memory: remember/forget policy and index.** Spotted (deferred). The hardest case is the long tail of light tasks (unbounded growth, forgetting both valuable and dangerous). Criterion for every choice: does it increase trustable offload.
 
-12. **Self-improvement and personality.** OPEN. Memory accretion, workflow self-improvement, optional code self-modification; the hot/cold loop split; and how the companion's personality forms over time with guardrails against undesirable drift.
+12. **Self-improvement and personality.** Spotted (deferred). Memory accretion, workflow self-improvement, optional code self-modification; the hot/cold loop split; and how the companion's personality forms over time with guardrails against undesirable drift.
 
-13. **Local model selection.** OPEN. Validate that small local models can perform reliable task extraction and the peer-level judgment the companion needs; the live conversational judgment may need the frontier path. Test before committing.
+13. **Local model selection.** Spotted (deferred). Validate that small local models can perform reliable task extraction and the peer-level judgment the companion needs; the live conversational judgment may need the frontier path. Test before committing.
 
-14. **Routing and provider policy.** OPEN. Route by sensitivity, not task type (in Architecture). Candidate providers to evaluate: Claude for the capable path, Groq for fast free-tier access to several open models (Groq the inference provider, not Grok). Reconcile each provider's data-retention terms with the privacy goal.
+14. **Routing and provider policy.** Spotted (deferred). Route by sensitivity, not task type (in Architecture). Candidate providers to evaluate: Claude for the capable path, Groq for fast free-tier access to several open models (Groq the inference provider, not Grok). Reconcile each provider's data-retention terms with the privacy goal.
 
 ---
 
@@ -107,6 +113,14 @@ These sit on top of the deterministic core and are deferred behind the desktop b
 ## Session log
 
 Newest first. Each session appends what it advanced or decided.
+
+### 2026-06-24 (Claude Code — continued build)
+
+- Renamed the project from the artifact name "Custodian" to "Steward" across all source, docs, and config: the env vars (`STEWARD_HOME`, `STEWARD_DEBUG`), the `~/.steward/steward.db` and `steward.log` paths, the window title, the logger name, and the test fixtures. Left the one metaphorical use of the common noun "custodian" in the Vision untouched. All 34 headless checks still pass.
+- Revised `.gitignore` ahead of the git repo: dropped entries copied from an unrelated "SpeakSelection" project and added Steward's runtime data (`.steward/`, `*.db` and its WAL sidecars).
+- Adopted a backlog lifecycle — **Spotted → Ready → Awaiting test → graduate** — and recorded it as the legend at the top of the Backlog. Migrated every item to it. Item numbers are kept as stable references.
+- Item 5 (Today drag-to-top bug): found the root cause — the reorder `dragover`/`drop` handlers sit only on the tight `#todayList` box, so a release above the first card falls outside it and is lost. Verified the index math and the engine commit path are correct for index 0. Fixed with a top catch strip on `#todayList` in `index.html`, and added a bridge regression check in `test_api.py` (reorder to index 0 → front, persists). Now **Awaiting test**: needs hands-on confirmation that the top drop registers.
+- Added a console-free Windows launch for daily use (the lead designer is adopting the app now): `run-quiet.vbs` starts the app via the venv's `pythonw.exe` so no console window appears, plus a pinnable `Steward` desktop shortcut to the same. `run.bat` stays for troubleshooting (it keeps a console to show crashes). Documented in `RUN.md`; noted under item 3. Login auto-start was offered and not set up. Awaiting confirmation that the shortcut launches cleanly.
 
 ### 2026-06-24
 
