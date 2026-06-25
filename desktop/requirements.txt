@@ -1,0 +1,9 @@
+# Steward runtime dependency.
+# The engine, storage, and every test suite use only the Python standard library.
+# pywebview is needed only to launch the desktop window (app.py).
+#
+# pywebview pulls a platform webview backend:
+#   - Windows: uses the Edge WebView2 runtime (present on current Windows 10/11)
+#   - macOS:   uses the system WebKit (no extra install)
+#   - Linux:   needs a backend, e.g.  pip install "pywebview[qt]"  (or [gtk])
+pywebview>=5.0

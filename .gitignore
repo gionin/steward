@@ -37,3 +37,6 @@ dist/
 
 # Throwaway spikes
 spike_*
+
+# Web / PWA build artifacts (vendor files ARE committed; exclude only generated output)
+web/dist/
