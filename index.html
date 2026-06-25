@@ -73,6 +73,21 @@
      inside its box to commit. Without this, "drop above the first card" falls
      outside the box and is lost — the index-0 reorder never registers. */
   #todayList{padding-top:14px}
+  .daynav{display:flex;align-items:center;gap:10px}
+  .daynav .htitle{flex:0 0 240px;text-align:center;margin:0}
+  .calhead{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
+  .calhead .calmonth{flex:0 0 200px;text-align:center;margin:0;font-size:18px}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:760px}
+  .cwh{text-align:center;color:var(--ink3);font-size:12px;padding:4px 0}
+  .ccell{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:62px;padding:8px 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);cursor:pointer;font:inherit}
+  .ccell.blank{border:none;background:transparent;cursor:default;min-height:0}
+  .ccell:hover:not(.blank){border-color:var(--accent)}
+  .ccell.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .ccell.future{opacity:.5}
+  .cnum{font-size:13px;font-weight:600}
+  .cstat{font-size:11px;color:var(--ink2)}
+  .titem.preview{opacity:.6}
+  .titem.preview .cbox{border-style:dashed;cursor:default}
   .titem{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px}
   .titem.dragging{opacity:.35}
   .grip{color:var(--ink3);cursor:grab;font-size:15px;line-height:1;user-select:none}
@@ -259,11 +274,14 @@ let store = null;   // thin read-only facade over S (see buildStore)
 
 const COLUMNS = ["Idea", "Planned", "Soon", "Ready"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const weekdayMon = d => (d.getDay() + 6) % 7;
 
 const ui = {
   view: "today", taskScope: "all", routineScope: "all",
-  currentDate: new Date(),
+  currentDate: new Date(),   // the live day (real today); never moved by navigation
+  viewedDate: new Date(),    // the day the checklist lens is showing
+  calDate: new Date(),       // any day in the month the calendar is showing
   settings: { theme: "dark", showPos: false },
   histForm: false, histKind: "task", histNew: false,
   lfCont: null, lfRCont: null, ooCont: null, oneoffOpen: false,
@@ -273,9 +291,10 @@ function localKey(d){
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
-const curKey = () => localKey(ui.currentDate);
+const curKey = () => localKey(ui.currentDate);     // the live day (sent as today_key everywhere)
+const viewedKey = () => localKey(ui.viewedDate);   // the day the Today lens is showing
 
-const NAV = [["today","◷","Today"],["tasks","▦","Tasks"],["routines","↻","Routines"],["containers","◰","Containers"],["history","≣","History"]];
+const NAV = [["today","◷","Checklist"],["tasks","▦","Tasks"],["routines","↻","Routines"],["containers","◰","Containers"],["history","≣","Calendar"]];
 const dmy = iso => { const [y,m,d] = iso.split("-"); return d + "/" + m + "/" + y; };
 const fmtDate = d => WEEKDAYS[weekdayMon(d)] + " " + dmy(localKey(d));
 const fmtKey = k => WEEKDAYS[weekdayMon(new Date(k + "T00:00:00"))] + " " + dmy(k);
@@ -319,8 +338,16 @@ function renderNav(){
 
 /* ---------- Today ---------- */
 function viewToday(){
-  const items = store.dayItems(curKey());
+  const isLive = S.isLive, isPast = S.isPast, isFuture = S.isFuture;
+  const items = store.dayItems(viewedKey());
   const rows = items.map(it => {
+    if (it.preview) {                          // future: read-only routine preview
+      return `<div class="titem preview">
+        <span class="cbox" aria-hidden="true"></span>
+        <span class="tname">${esc(it.name)}</span>
+        <span class="meta"><span class="recur" title="routine">↻</span><span class="chip cont">${esc(it.container)}</span></span>
+      </div>`;
+    }
     const done = it.done;
     return `<div class="titem ${done?"done":""}" data-key="${it.id}">
       <span class="grip" data-grip="${it.id}" title="drag to reorder">⋮⋮</span>
@@ -329,20 +356,41 @@ function viewToday(){
       <span class="meta">${it.oneOff&&it.sourceType==="routine"?'<span class="tag">one-off</span>':""}${it.recurring?'<span class="recur" title="routine">↻</span>':""}<span class="chip cont" data-tcont="${it.id}">${esc(it.container)}</span></span>
     </div>`;
   }).join("");
-  const held = S.heldCount;
-  const body = items.length ? `<div class="list" id="todayList">${rows}</div>` : `<div class="empty">Nothing drafted for today. Add something below, or enjoy the quiet.</div>`;
-  const ooCid = (ui.ooCont && store.containers[ui.ooCont]) ? ui.ooCont : store.containerOrder[0];
-  const ooROpts = liveRoutines().filter(r => r.containerId === ooCid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
-  const oneoff = ui.oneoffOpen
-    ? `<div class="oneoffbar"><span>One-off:</span><select id="ooCont">${contOptions(ooCid)}</select><select id="ooSel" style="flex:1">${ooROpts||'<option value="">(none here)</option>'}</select><button class="btn sm primary" id="ooAdd">Add to today</button><button class="btn sm" id="ooCancel">Cancel</button></div>`
-    : `<div class="oneoffbar"><button class="btn sm" id="ooOpen">↻ Add a one-off routine</button></div>`;
+
+  const emptyMsg = isFuture ? "No routines scheduled for this day."
+    : isPast ? "Nothing was tracked on this day."
+    : "Nothing drafted for today. Add something below, or enjoy the quiet.";
+  const body = items.length ? `<div class="list" id="todayList">${rows}</div>` : `<div class="empty">${emptyMsg}</div>`;
+
+  const eyebrow = isLive ? "Today" : isPast ? "Looking back" : "Looking ahead";
+  const nav = `<div class="daynav">
+      <button class="btn sm" id="dayPrev" title="previous day">‹</button>
+      <h1 class="htitle">${fmtDate(ui.viewedDate)}</h1>
+      <button class="btn sm" id="dayNext" title="next day">›</button>
+      ${isLive ? "" : `<button class="btn sm" id="dayToday">Jump to today</button>`}
+    </div>`;
+
+  const note = isFuture ? "Scheduled ahead — the routines enabled for this day. You'll check things off when it arrives."
+    : isPast ? `${items.length} on record for this day.`
+    : `${items.length} drafted · ${S.heldCount} held in other columns`;
+
+  let footer = "";
+  if (isLive) {
+    const ooCid = (ui.ooCont && store.containers[ui.ooCont]) ? ui.ooCont : store.containerOrder[0];
+    const ooROpts = liveRoutines().filter(r => r.containerId === ooCid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    const oneoff = ui.oneoffOpen
+      ? `<div class="oneoffbar"><span>One-off:</span><select id="ooCont">${contOptions(ooCid)}</select><select id="ooSel" style="flex:1">${ooROpts||'<option value="">(none here)</option>'}</select><button class="btn sm primary" id="ooAdd">Add to today</button><button class="btn sm" id="ooCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="ooOpen">↻ Add a one-off routine</button></div>`;
+    footer = `<div class="addrow"><span class="plus">+</span><input id="capIn" type="text" placeholder="Add a task for today…" autocomplete="off"></div>${oneoff}`;
+  } else if (isPast) {
+    footer = `<div class="oneoffbar"><button class="btn sm" id="backfillBtn">↻ Pull in this day's scheduled routines</button></div>`;
+  }
+
   return `
-    <div class="head"><div><div class="eyebrow">Today</div><h1 class="htitle">${fmtDate(ui.currentDate)}</h1></div>
-      <button class="btn" id="newDay">Start new day →</button></div>
-    <div class="note">${items.length} drafted · ${held} held in other columns</div>
+    <div class="head"><div><div class="eyebrow">${eyebrow}</div>${nav}</div></div>
+    <div class="note">${note}</div>
     ${body}
-    <div class="addrow"><span class="plus">+</span><input id="capIn" type="text" placeholder="Add a task for today…" autocomplete="off"></div>
-    ${oneoff}`;
+    ${footer}`;
 }
 
 /* ---------- scope ---------- */
@@ -446,32 +494,39 @@ function viewContainers(){
 
 /* ---------- History (editable) ---------- */
 function viewHistory(){
-  const maxKey = localKey(new Date(ui.currentDate.getTime() - 86400000));
-  const days = S.history.map(d => {
-    const k = d.dateKey;
-    const entries = d.entries.map(it => {
-      const done = it.done;
-      return `<div class="hentry ${done?"":"miss"}" data-hkey="${k}" data-hid="${it.id}">
-        <span class="grip" data-hgrip="${k}:${it.id}" title="drag">⋮⋮</span>
-        <span class="cbox ${done?"done":""}" data-hcheck="${k}:${it.id}">${done?"✓":""}</span>
-        <span class="hname" data-hname="${k}:${it.id}">${esc(it.name)}</span>
-        ${it.recurring?'<span class="recur">↻</span>':'<span class="tag">task</span>'}
-        ${(it.oneOff&&it.sourceType==="routine")?'<span class="tag">one-off</span>':""}
-        <span class="chip">${esc(it.container)}</span>
-        <input class="hdt" type="date" value="${k}" max="${maxKey}" data-hmove="${k}:${it.id}" title="move to another day">
-        <button class="hdel" data-hdel="${k}:${it.id}" title="delete entry">✕</button>
-      </div>`;
-    }).join("");
-    return `<div class="hday"><div class="hdate">${fmtKey(k)}</div><div class="hentries" data-hday="${k}">${entries}</div></div>`;
-  }).join("");
+  const todayKey = curKey();
+  const countDone = entries => {
+    let done = 0, total = 0;
+    entries.forEach(e => { if (e.preview) return; total++; if (e.done) done++; });
+    return { done, total };
+  };
+  const stats = {};
+  S.history.forEach(d => { stats[d.dateKey] = countDone(d.entries); });
+  if (S.todayKey === todayKey) stats[S.liveKey] = countDone(S.today);   // live day (go() makes S live for the calendar)
+  const view = ui.calDate, y = view.getFullYear(), m = view.getMonth();
+  const lead = weekdayMon(new Date(y, m, 1));
+  const nDays = new Date(y, m + 1, 0).getDate();
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="ccell blank"></div>`;
+  for (let d = 1; d <= nDays; d++) {
+    const k = localKey(new Date(y, m, d));
+    const st = stats[k];
+    const isToday = k === todayKey, isFuture = k > todayKey;
+    const ind = st ? `<span class="cstat">${st.done}/${st.total}</span>` : "";
+    cells += `<button class="ccell${isToday?" today":""}${isFuture?" future":""}" data-calday="${k}"><span class="cnum">${d}</span>${ind}</button>`;
+  }
+  const grid = `<div class="calgrid">${WEEKDAYS.map(w => `<div class="cwh">${w}</div>`).join("")}${cells}</div>`;
+  const header = `<div class="calhead"><button class="btn sm" id="calPrev" title="previous month">‹</button><h2 class="calmonth">${MONTHS[m]} ${y}</h2><button class="btn sm" id="calNext" title="next month">›</button><button class="btn sm" id="calToday">This month</button></div>`;
   const form = ui.histForm ? logForm() : "";
   return `
-    <div class="head"><div><div class="eyebrow">Log</div><h1 class="htitle">History</h1>
-      <div class="sub">What you did and didn't, tied to the real tasks and routines. Check to mark done, edit the date to move it, or log something after the fact.</div></div>
+    <div class="head"><div><div class="eyebrow">Calendar</div><h1 class="htitle">Calendar</h1>
+      <div class="sub">Every day's record. Click a day to open it in the checklist. Numbers show done / total.</div></div>
       <button class="btn" id="logBtn">${ui.histForm?"Close":"+ Log something I did"}</button></div>
     ${form}
-    ${days||'<div class="empty">No past days logged yet. Finish a day with "Start new day", or log a past activity above.</div>'}`;
+    ${header}
+    ${grid}`;
 }
+
 function logForm(){
   const dflt = localKey(new Date(ui.currentDate.getTime() - 86400000));
   const isTask = ui.histKind === "task";
@@ -543,7 +598,14 @@ async function openExport(){
 /* ===================== render + events ===================== */
 const VIEWS = { today:viewToday, tasks:viewTasks, routines:viewRoutines, containers:viewContainers, history:viewHistory, settings:viewSettings };
 function render(){ store = buildStore(); renderNav(); document.getElementById("main").innerHTML = VIEWS[ui.view](); wire(); }
-function go(v){ ui.view = v; render(); }
+async function go(v){
+  ui.view = v;
+  // Entering Today after acting elsewhere: make sure the snapshot reflects the viewed day.
+  if (v === "today" && S.todayKey !== viewedKey()) S = await api.get_state(curKey(), viewedKey());
+  // The calendar needs the live day's stats; make sure the snapshot is the live day.
+  if (v === "history" && S.todayKey !== curKey()) S = await api.get_state(curKey());
+  render();
+}
 
 function wire(){
   document.querySelectorAll("[data-nav]").forEach(b => b.onclick = () => go(b.dataset.nav));
@@ -552,25 +614,38 @@ function wire(){
 }
 
 function wireToday(){
-  document.getElementById("newDay").onclick = () => { ui.currentDate = new Date(ui.currentDate.getTime() + 86400000); ui.oneoffOpen = false; apply(api.get_state(curKey())); };
-  const cap = async () => { const i = document.getElementById("capIn"); const v = i.value.trim(); if (!v) return; S = await api.capture_task(v, curKey()); render(); const ni = document.getElementById("capIn"); if (ni) ni.focus(); };
-  document.getElementById("capIn").addEventListener("keydown", e => { if (e.key === "Enter") cap(); });
-  document.querySelectorAll("[data-check]").forEach(el => el.onclick = () => apply(api.toggle_today_item(el.dataset.check, curKey())));
+  const prev = document.getElementById("dayPrev"); if (prev) prev.onclick = () => gotoDay(-1);
+  const next = document.getElementById("dayNext"); if (next) next.onclick = () => gotoDay(1);
+  const jump = document.getElementById("dayToday"); if (jump) jump.onclick = () => gotoDay(0);
+  const bf = document.getElementById("backfillBtn"); if (bf) bf.onclick = async () => { S = await api.backfill_day(curKey(), viewedKey()); render(); };
+  const capEl = document.getElementById("capIn");
+  if (capEl) {
+    const cap = async () => { const i = document.getElementById("capIn"); const v = i.value.trim(); if (!v) return; S = await api.capture_task(v, curKey()); render(); const ni = document.getElementById("capIn"); if (ni) ni.focus(); };
+    capEl.addEventListener("keydown", e => { if (e.key === "Enter") cap(); });
+  }
+  document.querySelectorAll("[data-check]").forEach(el => el.onclick = () => apply(api.toggle_today_item(el.dataset.check, curKey(), viewedKey())));
   document.querySelectorAll("[data-tname]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tname); if (!x || x.done) return; editItemName(el, x); });
   document.querySelectorAll("[data-tcont]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tcont); if (!x) return; editItemContainer(el, x); });
   if (ui.oneoffOpen) {
     const oc = document.getElementById("ooCont"); if (oc) oc.onchange = () => { ui.ooCont = Number(oc.value); render(); };
-    document.getElementById("ooAdd").onclick = () => { const rid = document.getElementById("ooSel").value; if (rid) { ui.oneoffOpen = false; apply(api.add_one_off(rid, curKey())); } };
-    document.getElementById("ooCancel").onclick = () => { ui.oneoffOpen = false; render(); };
+    const ooAdd = document.getElementById("ooAdd"); if (ooAdd) ooAdd.onclick = () => { const rid = document.getElementById("ooSel").value; if (rid) { ui.oneoffOpen = false; apply(api.add_one_off(rid, curKey())); } };
+    const ooCancel = document.getElementById("ooCancel"); if (ooCancel) ooCancel.onclick = () => { ui.oneoffOpen = false; render(); };
   } else {
-    document.getElementById("ooOpen").onclick = () => { ui.oneoffOpen = true; render(); };
+    const ooOpen = document.getElementById("ooOpen"); if (ooOpen) ooOpen.onclick = () => { ui.oneoffOpen = true; render(); };
   }
   enableListReorder();
+}
+async function gotoDay(delta){
+  ui.viewedDate = delta === 0 ? new Date(ui.currentDate.getTime())
+                              : new Date(ui.viewedDate.getTime() + delta * 86400000);
+  ui.oneoffOpen = false;
+  S = await api.get_state(curKey(), viewedKey());
+  render();
 }
 function editItemName(el, it){
   const inp = mkInput(it.name); el.replaceWith(inp); inp.focus(); inp.select();
   let done = false;
-  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_item(it.id, v, curKey())); else render(); };
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_item(it.id, v, curKey(), viewedKey())); else render(); };
   inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
   inp.addEventListener("blur", commit);
 }
@@ -578,7 +653,7 @@ function editItemContainer(el, it){
   const sel = document.createElement("select"); sel.className = "selp"; sel.innerHTML = contOptions(it.containerId);
   el.replaceWith(sel); sel.focus();
   let done = false;
-  const commit = () => { if (done) return; done = true; apply(api.set_item_container(it.id, Number(sel.value), curKey())); };
+  const commit = () => { if (done) return; done = true; apply(api.set_item_container(it.id, Number(sel.value), curKey(), viewedKey())); };
   sel.addEventListener("change", commit);
   sel.addEventListener("blur", () => { if (!done) render(); });
 }
@@ -634,7 +709,7 @@ function wireRoutines(){
   document.querySelectorAll("[data-rday]").forEach(el => el.onclick = () => { const [id,day] = el.dataset.rday.split(":"); apply(api.toggle_routine_day(id, Number(day), curKey())); });
   document.querySelectorAll("[data-rtime]").forEach(el => el.onclick = () => startTimeEdit(el));
   document.querySelectorAll("[data-rdur]").forEach(el => el.onclick = () => startDurEdit(el));
-  document.querySelectorAll("[data-oneoff]").forEach(b => b.onclick = async () => { S = await api.add_one_off(b.dataset.oneoff, curKey()); go("today"); });
+  document.querySelectorAll("[data-oneoff]").forEach(b => b.onclick = async () => { ui.viewedDate = new Date(ui.currentDate.getTime()); S = await api.add_one_off(b.dataset.oneoff, curKey()); go("today"); });
   document.querySelectorAll("[data-arch]").forEach(b => b.onclick = () => apply(api.archive_routine(b.dataset.arch, curKey())));
   document.querySelectorAll("[data-unarch]").forEach(b => b.onclick = () => apply(api.unarchive_routine(b.dataset.unarch, curKey())));
   document.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => deleteRoutinePrompt(b.dataset.rdel));
@@ -717,32 +792,10 @@ async function deleteContainerPrompt(id){
 
 function wireHistory(){
   document.getElementById("logBtn").onclick = () => { ui.histForm = !ui.histForm; render(); };
-  document.querySelectorAll("[data-hcheck]").forEach(el => el.onclick = async () => {
-    const [k,id] = el.dataset.hcheck.split(":"); const e = findHist(k, id); if (!e) return;
-    if (e.sourceType === "task") {
-      if (e.done) { S = await api.history_toggle(id, k, curKey()); render(); }
-      else {
-        const dk = await api.task_done_key(e.sourceId);
-        if (dk && dk !== k && !confirm(`"${e.name}" is already marked done on ${dmy(dk)}.\nA task has one completion, and later not-done records are cleared. Move it to ${dmy(k)}?`)) return;
-        S = await api.mark_task_done(id, k, curKey()); render();
-      }
-    } else { S = await api.history_toggle(id, k, curKey()); render(); }
-  });
-  document.querySelectorAll("[data-hname]").forEach(el => el.onclick = () => {
-    const [k,id] = el.dataset.hname.split(":"); const e = findHist(k, id); if (!e) return;
-    const inp = mkInput(e.name); el.replaceWith(inp); inp.focus(); inp.select();
-    let done = false;
-    const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_item(id, v, curKey())); else render(); };
-    inp.addEventListener("keydown", ev => { if (ev.key === "Enter") commit(); if (ev.key === "Escape") render(); });
-    inp.addEventListener("blur", commit);
-  });
-  document.querySelectorAll("[data-hmove]").forEach(el => el.onchange = () => {
-    const [k,id] = el.dataset.hmove.split(":"); const nk = el.value;
-    if (!nk || nk === k) { render(); return; }
-    if (nk >= curKey()) { render(); return; }
-    apply(api.move_item(id, k, nk, curKey()));
-  });
-  document.querySelectorAll("[data-hdel]").forEach(el => el.onclick = () => { const [k,id] = el.dataset.hdel.split(":"); apply(api.remove_item(id, k, curKey())); });
+  const prev = document.getElementById("calPrev"); if (prev) prev.onclick = () => { ui.calDate = new Date(ui.calDate.getFullYear(), ui.calDate.getMonth() - 1, 1); render(); };
+  const next = document.getElementById("calNext"); if (next) next.onclick = () => { ui.calDate = new Date(ui.calDate.getFullYear(), ui.calDate.getMonth() + 1, 1); render(); };
+  const calT = document.getElementById("calToday"); if (calT) calT.onclick = () => { ui.calDate = new Date(ui.currentDate.getTime()); render(); };
+  document.querySelectorAll("[data-calday]").forEach(c => c.onclick = () => { ui.viewedDate = new Date(c.dataset.calday + "T00:00:00"); go("today"); });
   if (ui.histForm) {
     document.querySelectorAll("[data-lkind]").forEach(b => b.onclick = () => { ui.histKind = b.dataset.lkind; render(); });
     const nt = document.querySelector("[data-lnew]"); if (nt) nt.onclick = () => { ui.histNew = !ui.histNew; render(); };
@@ -781,7 +834,6 @@ function wireHistory(){
     document.getElementById("lfSaveDone").onclick = () => doLog(true);
     document.getElementById("lfSaveMiss").onclick = () => doLog(false);
   }
-  enableHistoryDnD();
 }
 
 function wireSettings(){
@@ -839,7 +891,7 @@ function enableListReorder(){
   list.addEventListener("drop", e => {
     e.preventDefault(); if (!dragKey) return;
     let idx = phSlot(list, ".titem"); if (idx < 0) idx = insertionIndexDOM(list, e.clientY, ".titem"); const id = dragKey; clearPh();
-    apply(api.reorder_today_item(id, idx, curKey()));
+    apply(api.reorder_today_item(id, idx, curKey(), viewedKey()));
   });
 }
 

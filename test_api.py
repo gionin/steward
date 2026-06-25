@@ -161,6 +161,76 @@ def _add_container_with_status():
 check("bridge: add_container honors an explicit status", _add_container_with_status)
 
 
+# ---- the navigable day model (item 17): live syncs, past is a record, future is a preview ----
+
+def _live_day_flags():
+    api, _ = fresh_api()
+    st = api.get_state(kMON)                          # no viewed_key -> viewing the live day
+    eq(st["isLive"], True, "no viewed_key means the live day")
+    eq(st["isPast"], False, "live day is not past")
+    eq(st["isFuture"], False, "live day is not future")
+    eq(st["liveKey"], kMON, "liveKey echoes the live day")
+    eq(st["todayKey"], kMON, "todayKey is the viewed day (== live here)")
+check("bridge: viewing the live day reports isLive and still syncs", _live_day_flags)
+
+
+def _past_is_a_record_not_re_derived():
+    api, _ = fresh_api()
+    # Set up with Tuesday as the live day, so Monday is never tracked.
+    h = api.add_container("Health", kTUE)["containers"]
+    hid = next(c["id"] for c in h if c["name"] == "Health")
+    st = api.add_routine("Run", hid, kTUE)
+    rid = next(r["id"] for r in st["routines"] if r["name"] == "Run")
+    api.toggle_routine_day(rid, 0, kTUE)             # scheduled Mondays, but the live day is Tuesday
+
+    st = api.get_state(kTUE, kMON)                   # live = Tue, view = Mon (past)
+    eq(st["isPast"], True, "Monday is past relative to Tuesday")
+    eq(names_today(st), [], "a never-tracked past Monday stays empty; today's schedule is not projected back")
+    if api.store.day_log.get(kMON):
+        raise AssertionError("viewing the past must not materialize it")
+check("bridge: a past day is its stored record, never re-derived", _past_is_a_record_not_re_derived)
+
+
+def _future_is_a_routines_only_preview():
+    api, _ = fresh_api()
+    h = api.add_container("Health", kMON)["containers"]
+    hid = next(c["id"] for c in h if c["name"] == "Health")
+    st = api.add_routine("Run", hid, kMON)
+    rid = next(r["id"] for r in st["routines"] if r["name"] == "Run")
+    api.toggle_routine_day(rid, 1, kMON)             # scheduled on Tuesdays
+    api.capture_task("Buy milk", kMON)               # an open Ready task on the live day
+
+    st = api.get_state(kMON, kTUE)                   # live = Mon, view = Tue (future)
+    eq(st["isFuture"], True, "Tuesday is future relative to Monday")
+    eq(names_today(st), ["Run"], "future shows the scheduled routine only, no open tasks")
+    eq(st["today"][0]["preview"], True, "future rows are read-only previews")
+    if kTUE in api.store.day_log:
+        raise AssertionError("viewing the future must not persist it")
+check("bridge: a future day is a routines-only preview, not persisted", _future_is_a_routines_only_preview)
+
+
+def _backfill_reconstructs_a_skipped_day():
+    api, _ = fresh_api()
+    # Live day is Tuesday, so Monday is a genuinely skipped (empty) past day.
+    h = api.add_container("Health", kTUE)["containers"]
+    hid = next(c["id"] for c in h if c["name"] == "Health")
+    st = api.add_routine("Run", hid, kTUE)
+    rid = next(r["id"] for r in st["routines"] if r["name"] == "Run")
+    api.toggle_routine_day(rid, 0, kTUE)             # Mondays
+    eq(names_today(api.get_state(kTUE, kMON)), [], "the skipped Monday starts empty")
+
+    st = api.backfill_day(kTUE, kMON)                # reconstruct the skipped Monday
+    eq(st["isPast"], True, "the back-filled day is still a past day")
+    eq(names_today(st), ["Run"], "back-fill pulls in that day's scheduled routines")
+    if not api.store.day_log.get(kMON):
+        raise AssertionError("back-fill must persist the reconstructed day")
+    # and the reconstructed record is editable like any other day
+    item_id = st["today"][0]["id"]
+    st = api.toggle_today_item(item_id, kTUE, kMON)
+    eq(st["today"][0]["done"], True, "a back-filled item checks off and stays on its day")
+check("bridge: back-fill reconstructs a skipped past day, routines only, then editable", _backfill_reconstructs_a_skipped_day)
+
+
 # ---- routines ----
 
 def _routines():

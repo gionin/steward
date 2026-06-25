@@ -110,12 +110,38 @@ class Api:
             "recurring": it.source_type == "routine",
         }
 
-    def _snapshot(self, today_key):
+    def _future_preview(self, view_key):
+        """A future day shows its scheduled routines only, derived live and NOT
+        persisted: the schedule paints the future, it is never frozen there.
+        These rows are read-only previews (no real day-log id)."""
         s = self.store
-        s.sync_day(_date_from_key(today_key))
-        self._save()  # persist the freshly synced day
+        out = []
+        for (_st, sid) in s.compute_routine_draft(_date_from_key(view_key)):
+            r = s.routines.get(sid)
+            if not r:
+                continue
+            out.append({
+                "id": "preview-%d" % sid, "sourceType": "routine", "sourceId": sid,
+                "name": r.name, "container": s.container_name(r.container_id),
+                "containerId": r.container_id, "done": False, "oneOff": False,
+                "recurring": True, "preview": True,
+            })
+        return out
 
-        today = [self._resolve_item(it) for it in s.day_items(today_key)]
+    def _snapshot(self, today_key, viewed_key=None):
+        s = self.store
+        live = today_key                 # the real current day (the client sends it)
+        view = viewed_key or today_key   # the day the Today lens is showing
+        s.sync_day(_date_from_key(live))  # only the live day ever re-syncs
+        self._save()                      # persist the freshly synced live day
+
+        is_future = view > live
+        is_past = view < live
+        if is_future:
+            today = self._future_preview(view)     # routines-only, transient
+        else:
+            # live or past: render that day's stored record (past is never re-derived)
+            today = [self._resolve_item(it) for it in s.day_items(view)]
         held = len([t for t in s.tasks.values()
                     if not t.completed and t.column != "Ready" and s.is_active(t.container_id)])
 
@@ -154,7 +180,7 @@ class Api:
             })
 
         hist_keys = sorted([k for k in s.day_log
-                            if k < today_key and s.day_log[k]], reverse=True)
+                            if k < live and s.day_log[k]], reverse=True)
         history = [{
             "dateKey": k,
             "entries": [self._resolve_item(it) for it in s.day_log[k]],
@@ -165,7 +191,11 @@ class Api:
 
         return {
             "version": APP_VERSION,
-            "todayKey": today_key,
+            "todayKey": view,
+            "liveKey": live,
+            "isLive": not is_future and not is_past,
+            "isPast": is_past,
+            "isFuture": is_future,
             "miscId": self._misc_id(),
             "today": today,
             "heldCount": held,
@@ -178,8 +208,20 @@ class Api:
 
     # ----- queries -----
 
-    def get_state(self, today_key):
-        return self._snapshot(today_key)
+    def get_state(self, today_key, viewed_key=None):
+        return self._snapshot(today_key, viewed_key)
+
+    def backfill_day(self, today_key, viewed_key):
+        """Reconstruct a skipped past day by pulling in the routines that were
+        scheduled then, so the user can record what actually happened. Routines
+        only; tasks are never projected backward."""
+        lst = self.store._day(viewed_key)
+        present = {(it.source_type, it.source_id) for it in lst}
+        for (st, sid) in self.store.compute_routine_draft(_date_from_key(viewed_key)):
+            if (st, sid) not in present:
+                lst.append(self.store.new_day_item(st, sid, False, False))
+        self._save()
+        return self._snapshot(today_key, viewed_key)
 
     def task_done_key(self, task_id):
         return self.store.task_done_key(int(task_id))
@@ -195,40 +237,41 @@ class Api:
             self.store.add_task(name, self._misc_id(), "Ready")
         return self._snapshot(today_key)
 
-    def toggle_today_item(self, item_id, today_key):
-        it = self._find_item_in(today_key, item_id)
+    def toggle_today_item(self, item_id, today_key, viewed_key=None):
+        day = viewed_key or today_key
+        it = self._find_item_in(day, item_id)
         if it:
             self.store.set_done(it, not it.done)
-        return self._snapshot(today_key)
+        return self._snapshot(today_key, viewed_key)
 
-    def reorder_today_item(self, item_id, idx, today_key):
-        items = self.store.day_log.get(today_key, [])
+    def reorder_today_item(self, item_id, idx, today_key, viewed_key=None):
+        items = self.store.day_log.get(viewed_key or today_key, [])
         item_id = int(item_id)
         pos = next((i for i, x in enumerate(items) if x.id == item_id), -1)
         if pos >= 0:
             it = items.pop(pos)
             idx = max(0, min(int(idx), len(items)))
             items.insert(idx, it)
-        return self._snapshot(today_key)
+        return self._snapshot(today_key, viewed_key)
 
     # ----- generator rename / refile (Today + History) -----
 
-    def rename_item(self, item_id, name, today_key):
+    def rename_item(self, item_id, name, today_key, viewed_key=None):
         name = (name or "").strip()
         it, _ = self._find_item(item_id)
         if it and name:
             g = self.store.item_gen(it)
             if g:
                 g.name = name
-        return self._snapshot(today_key)
+        return self._snapshot(today_key, viewed_key)
 
-    def set_item_container(self, item_id, container_id, today_key):
+    def set_item_container(self, item_id, container_id, today_key, viewed_key=None):
         it, _ = self._find_item(item_id)
         if it:
             g = self.store.item_gen(it)
             if g:
                 g.container_id = int(container_id)
-        return self._snapshot(today_key)
+        return self._snapshot(today_key, viewed_key)
 
     # ----- Tasks board -----
 

@@ -337,6 +337,20 @@ class Store:
             out.append(("routine", r.id))
         return out
 
+    def compute_routine_draft(self, d) -> list:
+        """The routines that would appear on date d, with no tasks: timed by time,
+        then untimed by the manual routine order. Used for future-day previews and
+        for back-filling a skipped past day, where projecting tasks makes no sense."""
+        timed, untimed = [], []
+        for r in self.routines.values():
+            if not r.active or r.archived or not self.routine_due_on(r, d) or not self.is_active(r.container_id):
+                continue
+            (timed if r.time else untimed).append(r)
+        timed.sort(key=lambda r: r.time)
+        rord = {rid: i for i, rid in enumerate(self.routine_order)}
+        untimed.sort(key=lambda r: rord.get(r.id, _END))
+        return [("routine", r.id) for r in timed] + [("routine", r.id) for r in untimed]
+
     def sync_day(self, d) -> list:
         """Sync ONLY the live (current) day. Past days must never be passed here."""
         k = key_of(d)
