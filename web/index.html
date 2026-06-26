@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1A1714">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Steward</title>
+<style>
+  :root{
+    --paper:#1A1714; --surface:#221F1A; --surface2:#1E1B16;
+    --ink:#ECE8E0; --ink2:#ADA89E; --ink3:#6A655D;
+    --line:#322E27; --line2:#29251F;
+    --accent:#62B6A6; --accent-ink:#8BD3C5; --accent-soft:#1F302B; --accent-soft2:#1B2420;
+    --warn:#C99A5A; --danger:#C25B4E;
+    --r:10px;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  [data-theme="light"]{
+    --paper:#F4F3EF; --surface:#FFFFFF; --surface2:#FBFAF7;
+    --ink:#23211E; --ink2:#74706A; --ink3:#A6A299;
+    --line:#E5E2DB; --line2:#EFEDE7;
+    --accent:#2E6E63; --accent-ink:#1E5249; --accent-soft:#E3EFEB; --accent-soft2:#F0F6F4;
+    --warn:#9A6B2F; --danger:#B5453A;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  button{font-family:inherit;font-size:inherit;cursor:pointer;color:inherit}
+  input,select{font-family:inherit;font-size:inherit;color:var(--ink)}
+
+  .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh}
+  .side{background:var(--surface2);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px}
+  .brand{padding:6px 8px 14px}
+  .brand .mark{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
+  .brand .name{font-weight:600;font-size:15px;margin-top:2px;line-height:1.2}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav button,.footbtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--ink2);padding:8px 9px;border-radius:8px;font-weight:500}
+  .nav button:hover,.footbtn:hover{background:var(--line2);color:var(--ink)}
+  .nav button.on,.footbtn.on{background:var(--accent-soft);color:var(--accent-ink)}
+  .nav .ic,.footbtn .ic{width:16px;text-align:center;font-size:14px;opacity:.9}
+  .side .spacer{flex:1}
+  .sidefoot{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--line);padding-top:8px}
+
+  .main{padding:26px 30px 60px;max-width:1180px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+  .htitle{font-size:23px;font-weight:600;letter-spacing:-.01em;margin:3px 0 0}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+  .sub{color:var(--ink2);font-size:13.5px;margin-top:4px;max-width:62ch}
+
+  .btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 13px;font-weight:550}
+  .btn:hover{border-color:var(--ink3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#10201C}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.sm{padding:5px 10px;font-size:13px}
+  .btn.danger{color:var(--danger);border-color:var(--line)}
+  .btn.danger:hover{border-color:var(--danger)}
+
+  .chip{font-family:var(--mono);font-size:11px;color:var(--ink2);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .chip.cont{color:var(--accent-ink);background:var(--accent-soft2);border-color:var(--line);cursor:pointer}
+  .chip.cont:hover{border-color:var(--accent)}
+  .recur{color:var(--accent);font-size:12px}
+  .tag{font-family:var(--mono);font-size:10px;color:var(--ink3);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+
+  .scopebar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+  .scopebar button{background:var(--surface);border:1px solid var(--line);color:var(--ink2);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:500}
+  .scopebar button.muted{opacity:.55}
+  .scopebar button.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+  /* Today */
+  .note{font-family:var(--mono);font-size:12px;color:var(--ink2);margin:-6px 0 16px}
+  .list{display:flex;flex-direction:column;gap:7px;max-width:640px}
+  /* Top catch strip: the drop handler lives on #todayList, so a release must land
+     inside its box to commit. Without this, "drop above the first card" falls
+     outside the box and is lost — the index-0 reorder never registers. */
+  #todayList{padding-top:14px}
+  .daynav{display:flex;align-items:center;gap:10px}
+  .daynav .htitle{flex:0 0 240px;text-align:center;margin:0}
+  .calhead{display:flex;align-items:center;gap:10px;margin:6px 0 14px}
+  .calhead .calmonth{flex:0 0 200px;text-align:center;margin:0;font-size:18px}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;max-width:760px}
+  .cwh{text-align:center;color:var(--ink3);font-size:12px;padding:4px 0}
+  .ccell{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:62px;padding:8px 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);cursor:pointer;font:inherit}
+  .ccell.blank{border:none;background:transparent;cursor:default;min-height:0}
+  .ccell:hover:not(.blank){border-color:var(--accent)}
+  .ccell.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .ccell.future{opacity:.5}
+  .cnum{font-size:13px;font-weight:600}
+  .cstat{font-size:11px;color:var(--ink2)}
+  .titem.preview{opacity:.6}
+  .titem.preview .cbox{border-style:dashed;cursor:default}
+  .titem{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px}
+  .titem.dragging{opacity:.35}
+  .grip{color:var(--ink3);cursor:grab;font-size:15px;line-height:1;user-select:none}
+  .cbox{width:19px;height:19px;border:1.6px solid var(--ink3);border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px}
+  .cbox.done{background:var(--accent);border-color:var(--accent);color:#10201C}
+  .tname{flex:1;cursor:text}
+  .titem.done .tname{color:var(--ink3);text-decoration:line-through;cursor:default}
+  .meta{display:flex;align-items:center;gap:7px}
+  .addrow{display:flex;align-items:center;gap:10px;max-width:640px;margin-top:9px;border:1px dashed var(--line);border-radius:var(--r);padding:9px 13px;background:none}
+  .addrow .plus{color:var(--accent);font-size:18px;line-height:1;width:19px;text-align:center}
+  .addrow input{flex:1;border:0;background:none;outline:none;padding:2px 0;color:var(--ink)}
+  .oneoffbar{display:flex;align-items:center;gap:8px;max-width:640px;margin-top:8px;font-size:13px;color:var(--ink2)}
+  .oneoffbar select{border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:var(--surface)}
+  .empty{color:var(--ink2);background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;max-width:640px;font-size:14px}
+
+  /* Kanban */
+  .board{display:flex;gap:13px;align-items:flex-start;overflow-x:auto;padding-bottom:8px}
+  .col{flex:1 1 176px;min-width:166px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:11px;min-height:140px;display:flex;flex-direction:column}
+  .col.over{border-color:var(--accent)}
+  .colhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:1px 2px}
+  .colttl{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px}
+  .bars{display:flex;gap:2px;align-items:flex-end;height:13px}
+  .bars i{width:3px;background:var(--accent);border-radius:1px;opacity:.28}
+  .bars i.f{opacity:1}
+  .count{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+  .cards{flex:1;min-height:30px}
+  .card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:10px 11px;margin-bottom:8px;cursor:grab}
+  .card.dragging{opacity:.35}
+  .card .cn{font-size:14px;line-height:1.3;cursor:text;padding-right:16px}
+  .card .cmeta{margin-top:7px}
+  .col.ready .card{border-left:3px solid var(--accent)}
+  .cardx{position:absolute;top:6px;right:7px;border:0;background:none;color:var(--ink3);font-size:13px;line-height:1;opacity:0;transition:opacity .1s}
+  .card:hover .cardx{opacity:1}
+  .cardx:hover{color:var(--danger)}
+  .addcard{width:100%;border:1px dashed var(--line);background:none;color:var(--ink3);border-radius:8px;padding:7px;font-size:13px;font-weight:500;margin-top:2px}
+  .addcard:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .donezone{flex:0 0 134px;align-self:stretch;border:1.5px dashed var(--line);border-radius:12px;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink3);text-align:center;padding:14px}
+  .donezone.over{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+  .donezone .gl{font-size:24px}
+  .donezone .lb{font-size:12px;font-family:var(--mono);letter-spacing:.03em}
+  .drop-ph{border:1.5px dashed var(--accent);background:var(--accent-soft);border-radius:8px;min-height:30px;margin-bottom:8px}
+
+  /* Routines */
+  .rgroup{margin-bottom:22px}
+  .rgroup h3{font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 9px;display:flex;align-items:center;gap:8px}
+  .rtable{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .rrow{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.9fr) 50px 108px;gap:11px;align-items:center;padding:11px 14px;border-top:1px solid var(--line2)}
+  .rrow:first-child{border-top:0}
+  .rrow.h{background:var(--surface2);font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
+  .rrow[data-rrow].dragging{opacity:.35}
+  .rname{font-weight:550;font-size:14px;cursor:text;display:flex;align-items:center;gap:7px;min-width:0}
+  .rnt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rname .ph{color:var(--ink3);font-weight:400}
+  .rrow.off .rname{color:var(--ink3)}
+  .raddrow{padding:8px 14px;border-top:1px solid var(--line2)}
+  .raddbtn{border:0;background:none;color:var(--ink2);font-size:13px;font-weight:550;cursor:pointer;padding:2px 0}
+  .raddbtn:hover{color:var(--accent-ink)}
+  .cellinp{width:100%;min-width:60px;background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:4px 6px;color:var(--ink);font-family:var(--mono);font-size:12.5px}
+  .timepick{display:inline-flex;align-items:center;gap:3px}
+  .tpsel{background:var(--surface2);border:1px solid var(--accent);border-radius:6px;padding:3px 4px;color:var(--ink);font-family:var(--mono);font-size:12.5px}
+  .tpsep{color:var(--ink2);font-family:var(--mono)}
+  .tpbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer}
+  .tpbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .days{display:flex;gap:3px}
+  .d{width:21px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--mono);background:var(--line2);color:var(--ink3)}
+  .d.on{background:var(--accent);color:#10201C}
+  .days .d{cursor:pointer}
+  .num{font-family:var(--mono);font-size:12.5px;color:var(--ink2);cursor:text}
+  .num.mut{color:var(--ink3)}
+  .num.ro{cursor:default}
+  .toggle{width:36px;height:21px;border-radius:999px;background:var(--line);border:0;position:relative;flex:0 0 auto}
+  .toggle.on{background:var(--accent)}
+  .toggle .knob{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:left .12s}
+  .toggle.on .knob{left:17px}
+  .ract{display:flex;gap:5px;align-items:center}
+  .iconbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink2);border-radius:6px;padding:3px 7px;font-size:12px;font-weight:550}
+  .iconbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .iconbtn.del:hover{border-color:var(--danger);color:var(--danger)}
+
+  .form{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px;display:flex;flex-direction:column;gap:11px;max-width:560px}
+  .form .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .form label{font-size:12px;color:var(--ink2);font-weight:550;min-width:74px}
+  .form input[type=text],.form input[type=time],.form input[type=number],.form input[type=date],.form select{border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--surface)}
+  .form input:focus,.form select:focus{outline:none;border-color:var(--accent)}
+  .daypick{display:flex;gap:4px}
+  .daypick .d{cursor:pointer}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{padding:6px 14px;background:var(--surface2);border:0;color:var(--ink2);font-weight:550;font-size:13px}
+  .seg button.on{background:var(--accent);color:#10201C}
+
+  /* Containers */
+  .cgroup{margin-bottom:18px}
+  .cgroup h3{font-size:11px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:0 0 8px}
+  .crow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-bottom:7px}
+  .crow.dragging{opacity:.35}
+  .clist{min-height:8px}
+  .cdrop{border:1px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--ink3);font-size:13px}
+  .crow .cinfo{display:flex;align-items:center;gap:10px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .dot.planned{background:var(--warn)}
+  .dot.completed{background:var(--ink3)}
+  .dot.cancelled{background:var(--danger)}
+  .cname{font-weight:550}
+  .protmark{color:var(--accent);font-size:12px;cursor:default}
+  .ccount{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+  .crow select{border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:var(--surface2);color:var(--ink2)}
+
+  /* History */
+  .hday{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:9px;max-width:660px}
+  .hdate{font-family:var(--mono);font-size:12px;color:var(--accent-ink);font-weight:600;letter-spacing:.03em;margin-bottom:8px}
+  .hentry{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line2)}
+  .hentry.dragging{opacity:.35}
+  .hentries{min-height:6px}
+  .hdel{border:0;background:none;color:var(--ink3);font-size:12px;cursor:pointer;padding:2px 4px;line-height:1}
+  .hdel:hover{color:var(--danger)}
+  .hentry:first-of-type{border-top:0}
+  .hentry .hname{flex:1;cursor:text}
+  .hentry.miss .hname{color:var(--ink3)}
+  .hentry .hdt{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;background:var(--surface2);color:var(--ink2)}
+  .logform{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px;display:flex;flex-direction:column;gap:11px;max-width:560px}
+
+  /* Settings */
+  .sset{max-width:560px}
+  .scard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px 16px;margin-bottom:16px}
+  .srow{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 0;border-top:1px solid var(--line2)}
+  .srow:first-child{border-top:0}
+  .srow .lbl{font-weight:550}
+  .srow .desc{font-size:12.5px;color:var(--ink2);margin-top:2px;max-width:42ch}
+  .ssection{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin:0 0 8px 2px}
+  .sver{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+
+  /* modal */
+  .veil{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:24px;z-index:30}
+  .modal{background:var(--surface);border-radius:14px;width:min(640px,100%);max-height:84vh;overflow:auto;border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.4)}
+  .modal .mh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .modal .mh .t{font-weight:600}
+  .modal .mb{padding:16px 18px}
+  .modal textarea{width:100%;min-height:300px;border:1px solid var(--line);border-radius:8px;padding:12px;font-family:var(--mono);font-size:12px;line-height:1.55;color:var(--ink);background:var(--surface2);resize:vertical}
+  .x{border:0;background:none;font-size:20px;color:var(--ink3);line-height:1;cursor:pointer}
+
+  .inlinp{width:100%;border:1px solid var(--accent);border-radius:6px;padding:4px 6px;font:inherit;background:var(--surface);color:var(--ink)}
+  .selp{font-family:var(--mono);font-size:11px;border:1px solid var(--accent);border-radius:999px;padding:2px 6px;background:var(--surface);color:var(--ink)}
+
+  .booting{padding:60px 30px;color:var(--ink2)}
+
+  @media (max-width:760px){
+    .app{grid-template-columns:1fr}
+    .side{flex-direction:row;flex-wrap:wrap;align-items:center;border-right:0;border-bottom:1px solid var(--line);padding:12px}
+    .brand{padding:0 10px 0 4px}
+    .nav{flex-direction:row;flex-wrap:wrap}
+    .side .spacer{display:none}
+    .sidefoot{flex-direction:row;border-top:0;padding-top:0}
+    .footbtn{width:auto}
+    .main{padding:20px 16px 60px}
+    .rrow{grid-template-columns:1fr;gap:7px}
+    .rrow.h{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="mark">Offload</div><div class="name">Steward</div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="spacer"></div>
+    <div class="sidefoot">
+      <button class="footbtn" id="settingsBtn"><span class="ic">⚙</span>Settings</button>
+      <button class="footbtn" id="exportBtn"><span class="ic">⎙</span>Context for chat</button>
+    </div>
+  </aside>
+  <main class="main" id="main"><div class="booting">Starting Steward…</div></main>
+</div>
+
+<script>
+/* ============================================================
+   The engine and all state live in Python. This script renders
+   from a snapshot (S) and sends one command per action across the
+   pywebview bridge; every command returns the fresh snapshot.
+   ============================================================ */
+
+let api = null;     // window.pywebview.api
+let S = null;       // latest snapshot from Python
+let store = null;   // thin read-only facade over S (see buildStore)
+
+const COLUMNS = ["Idea", "Planned", "Soon", "Ready"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const weekdayMon = d => (d.getDay() + 6) % 7;
+
+const ui = {
+  view: "today", taskScope: "all", routineScope: "all",
+  currentDate: new Date(),   // the live day (real today); never moved by navigation
+  viewedDate: new Date(),    // the day the checklist lens is showing
+  calDate: new Date(),       // any day in the month the calendar is showing
+  settings: { theme: "dark", showPos: false },
+  histForm: false, histKind: "task", histNew: false,
+  lfCont: null, lfRCont: null, ooCont: null, oneoffOpen: false,
+};
+
+function localKey(d){
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+const curKey = () => localKey(ui.currentDate);     // the live day (sent as today_key everywhere)
+const viewedKey = () => localKey(ui.viewedDate);   // the day the Today lens is showing
+
+const NAV = [["today","◷","Checklist"],["tasks","▦","Tasks"],["routines","↻","Routines"],["containers","◰","Containers"],["history","≣","Calendar"]];
+const dmy = iso => { const [y,m,d] = iso.split("-"); return d + "/" + m + "/" + y; };
+const fmtDate = d => WEEKDAYS[weekdayMon(d)] + " " + dmy(localKey(d));
+const fmtKey = k => WEEKDAYS[weekdayMon(new Date(k + "T00:00:00"))] + " " + dmy(k);
+const esc = s => ("" + s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const contOptions = sel => store.containerList.map(c => `<option value="${c.id}" ${c.id===sel?"selected":""}>${esc(c.name)}</option>`).join("");
+const liveRoutines = () => S.routines.filter(r => !r.archived);
+
+function applyTheme(){ document.documentElement.dataset.theme = ui.settings.theme; }
+function mkInput(val){ const i = document.createElement("input"); i.className = "inlinp"; i.type = "text"; i.value = val; return i; }
+
+/* ---- read-only facade over the snapshot (no engine logic; trivial accessors) ---- */
+function buildStore(){
+  const st = { containers:{}, containerOrder:[], containerList:S.containers, tasks:{}, routines:{}, routineList:S.routines, dayLog:{} };
+  S.containers.forEach(c => { st.containers[c.id] = c; st.containerOrder.push(c.id); });
+  for (const col of COLUMNS) (S.columns[col] || []).forEach(t => { st.tasks[t.id] = t; });
+  S.routines.forEach(r => { st.routines[r.id] = r; });
+  st.dayLog[S.todayKey] = S.today;
+  S.history.forEach(d => { st.dayLog[d.dateKey] = d.entries; });
+  st.isActive = cid => { const c = st.containers[cid]; return !!(c && c.status === "active"); };
+  st.containerName = cid => st.containers[cid] ? st.containers[cid].name : "?";
+  st.columnTasks = col => S.columns[col] || [];
+  st.orderedContainers = status => S.containers.filter(c => status == null || c.status === status);
+  st.orderedRoutines = cid => S.routines.filter(r => r.containerId === cid && !r.archived);
+  st.hoursPerWeek = r => r.hoursPerWeek;
+  st.dayItems = k => st.dayLog[k] || [];
+  st.taskLogCount = id => st.tasks[id] ? st.tasks[id].logCount : 0;
+  st.routineLogCount = id => { const r = st.routines[id]; return r ? r.logCount : 0; };
+  return st;
+}
+
+const findToday = id => S.today.find(x => String(x.id) === String(id));
+function findHist(k, id){ const d = S.history.find(x => x.dateKey === k); return d ? (d.entries.find(e => String(e.id) === String(id)) || null) : null; }
+
+/* ---- the single bridge helper: run a command, take its snapshot, repaint ---- */
+async function apply(promise){ S = await promise; render(); }
+
+function renderNav(){
+  document.getElementById("nav").innerHTML = NAV.map(([k,ic,lb]) => `<button class="${k===ui.view?"on":""}" data-nav="${k}"><span class="ic">${ic}</span>${lb}</button>`).join("");
+  document.getElementById("settingsBtn").classList.toggle("on", ui.view === "settings");
+}
+
+/* ---------- Today ---------- */
+function viewToday(){
+  const isLive = S.isLive, isPast = S.isPast, isFuture = S.isFuture;
+  const items = store.dayItems(viewedKey());
+  const rows = items.map(it => {
+    if (it.preview) {                          // future: read-only routine preview
+      return `<div class="titem preview">
+        <span class="cbox" aria-hidden="true"></span>
+        <span class="tname">${esc(it.name)}</span>
+        <span class="meta"><span class="recur" title="routine">↻</span><span class="chip cont">${esc(it.container)}</span></span>
+      </div>`;
+    }
+    const done = it.done;
+    return `<div class="titem ${done?"done":""}" data-key="${it.id}">
+      <span class="grip" data-grip="${it.id}" title="drag to reorder">⋮⋮</span>
+      <span class="cbox ${done?"done":""}" data-check="${it.id}">${done?"✓":""}</span>
+      <span class="tname" data-tname="${it.id}">${esc(it.name)}</span>
+      <span class="meta">${it.oneOff&&it.sourceType==="routine"?'<span class="tag">one-off</span>':""}${it.recurring?'<span class="recur" title="routine">↻</span>':""}<span class="chip cont" data-tcont="${it.id}">${esc(it.container)}</span></span>
+    </div>`;
+  }).join("");
+
+  const emptyMsg = isFuture ? "No routines scheduled for this day."
+    : isPast ? "Nothing was tracked on this day."
+    : "Nothing drafted for today. Add something below, or enjoy the quiet.";
+  const body = items.length ? `<div class="list" id="todayList">${rows}</div>` : `<div class="empty">${emptyMsg}</div>`;
+
+  const eyebrow = isLive ? "Today" : isPast ? "Looking back" : "Looking ahead";
+  const nav = `<div class="daynav">
+      <button class="btn sm" id="dayPrev" title="previous day">‹</button>
+      <h1 class="htitle">${fmtDate(ui.viewedDate)}</h1>
+      <button class="btn sm" id="dayNext" title="next day">›</button>
+      ${isLive ? "" : `<button class="btn sm" id="dayToday">Jump to today</button>`}
+    </div>`;
+
+  const note = isFuture ? "Scheduled ahead — the routines enabled for this day. You'll check things off when it arrives."
+    : isPast ? `${items.length} on record for this day.`
+    : `${items.length} drafted · ${S.heldCount} held in other columns`;
+
+  let footer = "";
+  if (isLive) {
+    const ooCid = (ui.ooCont && store.containers[ui.ooCont]) ? ui.ooCont : store.containerOrder[0];
+    const ooROpts = liveRoutines().filter(r => r.containerId === ooCid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    const oneoff = ui.oneoffOpen
+      ? `<div class="oneoffbar"><span>One-off:</span><select id="ooCont">${contOptions(ooCid)}</select><select id="ooSel" style="flex:1">${ooROpts||'<option value="">(none here)</option>'}</select><button class="btn sm primary" id="ooAdd">Add to today</button><button class="btn sm" id="ooCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="ooOpen">↻ Add a one-off routine</button></div>`;
+    footer = `<div class="addrow"><span class="plus">+</span><input id="capIn" type="text" placeholder="Add a task for today…" autocomplete="off"></div>${oneoff}`;
+  } else if (isPast) {
+    footer = `<div class="oneoffbar"><button class="btn sm" id="backfillBtn">↻ Pull in this day's scheduled routines</button></div>`;
+  }
+
+  return `
+    <div class="head"><div><div class="eyebrow">${eyebrow}</div>${nav}</div></div>
+    <div class="note">${note}</div>
+    ${body}
+    ${footer}`;
+}
+
+/* ---------- scope ---------- */
+function scopeBar(kind){
+  const cur = kind === "task" ? ui.taskScope : ui.routineScope;
+  const ordered = store.containerList;
+  const list = [...ordered.filter(c => c.status === "active"), ...ordered.filter(c => c.status !== "active")];
+  const opts = [["all","All active"]].concat(list.map(c => [String(c.id), c.name]));
+  return `<div class="scopebar">` + opts.map(([v,l]) => {
+    const c = v === "all" ? null : store.containers[v];
+    const muted = c && c.status !== "active" ? " muted" : "";
+    return `<button class="${String(cur)===v?"on":""}${muted}" data-scope="${kind}:${v}">${esc(l)}</button>`;
+  }).join("") + `</div>`;
+}
+
+/* ---------- Tasks ---------- */
+function viewTasks(){
+  const strength = { Idea:1, Planned:2, Soon:3, Ready:4 };
+  const specific = ui.taskScope !== "all";
+  const cols = COLUMNS.map(col => {
+    let tasks = store.columnTasks(col);
+    tasks = specific ? tasks.filter(t => String(t.containerId) === String(ui.taskScope)) : tasks.filter(t => t.containerActive);
+    const cards = tasks.map(t => {
+      let meta = "";
+      if (!specific) meta = `<span class="chip cont" data-ccont="${t.id}">${esc(t.containerName)}</span>`;
+      else if (ui.settings.showPos) meta = `<span class="chip">pos ${t.position}</span>`;
+      return `<div class="card" draggable="true" data-card="${t.id}">
+        <button class="cardx" data-del="${t.id}" title="delete task">✕</button>
+        <div class="cn" data-rename="${t.id}">${esc(t.name)}</div>
+        ${meta?`<div class="cmeta">${meta}</div>`:""}</div>`;
+    }).join("");
+    const bars = [1,2,3,4].map(n => `<i class="${n<=strength[col]?"f":""}" style="height:${4+n*2}px"></i>`).join("");
+    return `<div class="col ${col==="Ready"?"ready":""}" data-col="${col}">
+      <div class="colhead"><span class="colttl"><span class="bars">${bars}</span>${col}</span><span class="count">${tasks.length}</span></div>
+      <div class="cards" data-cards="${col}">${cards}</div>
+      <button class="addcard" data-add="${col}">+ add</button></div>`;
+  }).join("");
+  return `
+    <div class="head"><div><div class="eyebrow">Board</div><h1 class="htitle">Tasks</h1>
+      <div class="sub">Drag between columns to set importance. Drop on the right to complete. Completing hides a task; it stays in History.</div></div></div>
+    ${scopeBar("task")}
+    <div class="board">${cols}<div class="donezone" data-done="1"><span class="gl">✓</span><span class="lb">drop to complete</span></div></div>`;
+}
+
+/* ---------- Routines ---------- */
+function viewRoutines(){
+  let conts;
+  if (ui.routineScope !== "all") { const c = store.containers[ui.routineScope]; conts = c ? [c] : []; }
+  else conts = store.orderedContainers("active");
+  const head = `<div class="rrow h"><div>Routine</div><div>Days</div><div>Time</div><div>Duration</div><div>Per week</div><div>On</div><div>Actions</div></div>`;
+  const groups = conts.map(c => {
+    const rs = store.orderedRoutines(c.id);
+    const rows = rs.map(r => routineRow(r)).join("");
+    return `<div class="rgroup"><h3><span class="dot ${c.status!=="active"?c.status:""}"></span>${esc(c.name)}</h3>
+      <div class="rtable" data-rgroup="${c.id}">${head}${rows}<div class="raddrow"><button class="raddbtn" data-raddc="${c.id}">+ add routine</button></div></div></div>`;
+  }).join("");
+  const archived = S.routines.filter(r => r.archived);
+  const archBlock = archived.length ? `<div class="rgroup"><h3 style="color:var(--ink3)">Archived</h3><div class="rtable">${archived.map(r => `
+    <div class="rrow off"><div class="rname">${esc(r.name)}</div><div style="grid-column:span 4;color:var(--ink3);font-size:12.5px">${esc(r.containerName)} · no occurrences · history kept</div>
+    <div></div><div class="ract"><button class="iconbtn" data-unarch="${r.id}">Restore</button><button class="iconbtn del" data-rdel="${r.id}">Delete</button></div></div>`).join("")}</div></div>` : "";
+  return `
+    <div class="head"><div><div class="eyebrow">Cadence</div><h1 class="htitle">Routines</h1>
+      <div class="sub">Plan the shape of your week. Add a routine to any area, then click a day, time, or duration to set it. Drag by the handle to reorder. "+today" drops a one-off regardless of schedule.</div></div></div>
+    ${scopeBar("routine")}
+    ${groups||'<div class="empty">No active containers in this scope.</div>'}
+    ${archBlock}`;
+}
+function routineRow(r){
+  const days = WEEKDAYS.map((w,i) => `<span class="d ${r.daysOfWeek.includes(i)?"on":""}" data-rday="${r.id}:${i}">${w[0]}</span>`).join("");
+  const hpw = store.hoursPerWeek(r);
+  return `<div class="rrow ${r.active?"":"off"}" data-rrow="${r.id}">
+    <div class="rname" data-rname="${r.id}"><span class="grip" data-rgrip="${r.id}" title="drag to reorder">⋮⋮</span><span class="rnt">${r.name?esc(r.name):'<span class="ph">Untitled</span>'}</span></div>
+    <div class="days">${days}</div>
+    <div class="num ${r.time?"":"mut"}" data-rtime="${r.id}">${r.time||"—"}</div>
+    <div class="num ${r.durationHours!=null?"":"mut"}" data-rdur="${r.id}">${r.durationHours!=null?r.durationHours+"h":"—"}</div>
+    <div class="num ro ${hpw!=null?"":"mut"}">${hpw!=null?hpw+"h":"—"}</div>
+    <div><button class="toggle ${r.active?"on":""}" data-rtoggle="${r.id}"><span class="knob"></span></button></div>
+    <div class="ract"><button class="iconbtn" data-oneoff="${r.id}" title="add a one-off to today">+today</button><button class="iconbtn" data-arch="${r.id}" title="archive">⊟</button><button class="iconbtn del" data-rdel="${r.id}" title="delete">✕</button></div>
+  </div>`;
+}
+
+/* ---------- Containers ---------- */
+function viewContainers(){
+  const order = ["active","planned","completed","cancelled"];
+  const label = { active:"Active", planned:"Set aside", completed:"Completed", cancelled:"Cancelled" };
+  const groups = order.map(st => {
+    const cs = store.orderedContainers(st);
+    const rows = cs.map(c => {
+      const mark = c.protected ? `<span class="protmark" title="Protected — can't be deleted">⚓</span>` : "";
+      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname">${esc(c.name)}</span>${mark}
+        <span class="ccount">${c.taskCount} tasks · ${c.routineCount} routines</span></div>${c.protected?"":`<button class="iconbtn del" data-cdel="${c.id}" title="delete area">✕</button>`}</div>`;
+    }).join("");
+    const add = `<div class="raddrow"><button class="raddbtn" data-cadd="${st}">+ add container</button></div>`;
+    return `<div class="cgroup"><h3>${label[st]}</h3><div class="clist" data-cgroup="${st}">${rows||'<div class="cdrop">Drop a container here</div>'}</div>${add}</div>`;
+  }).join("");
+  return `
+    <div class="head"><div><div class="eyebrow">Areas</div><h1 class="htitle">Containers</h1>
+      <div class="sub">Only active containers feed Today. Drag a container to reorder it, or into another group to change its status. Misc (⚓) is always kept as a home for tasks.</div></div></div>
+    ${groups}`;
+}
+
+/* ---------- History (editable) ---------- */
+function viewHistory(){
+  const todayKey = curKey();
+  const countDone = entries => {
+    let done = 0, total = 0;
+    entries.forEach(e => { if (e.preview) return; total++; if (e.done) done++; });
+    return { done, total };
+  };
+  const stats = {};
+  S.history.forEach(d => { stats[d.dateKey] = countDone(d.entries); });
+  if (S.todayKey === todayKey) stats[S.liveKey] = countDone(S.today);   // live day (go() makes S live for the calendar)
+  const view = ui.calDate, y = view.getFullYear(), m = view.getMonth();
+  const lead = weekdayMon(new Date(y, m, 1));
+  const nDays = new Date(y, m + 1, 0).getDate();
+  let cells = "";
+  for (let i = 0; i < lead; i++) cells += `<div class="ccell blank"></div>`;
+  for (let d = 1; d <= nDays; d++) {
+    const k = localKey(new Date(y, m, d));
+    const st = stats[k];
+    const isToday = k === todayKey, isFuture = k > todayKey;
+    const ind = st ? `<span class="cstat">${st.done}/${st.total}</span>` : "";
+    cells += `<button class="ccell${isToday?" today":""}${isFuture?" future":""}" data-calday="${k}"><span class="cnum">${d}</span>${ind}</button>`;
+  }
+  const grid = `<div class="calgrid">${WEEKDAYS.map(w => `<div class="cwh">${w}</div>`).join("")}${cells}</div>`;
+  const header = `<div class="calhead"><button class="btn sm" id="calPrev" title="previous month">‹</button><h2 class="calmonth">${MONTHS[m]} ${y}</h2><button class="btn sm" id="calNext" title="next month">›</button><button class="btn sm" id="calToday">This month</button></div>`;
+  const form = ui.histForm ? logForm() : "";
+  return `
+    <div class="head"><div><div class="eyebrow">Calendar</div><h1 class="htitle">Calendar</h1>
+      <div class="sub">Every day's record. Click a day to open it in the checklist. Numbers show done / total.</div></div>
+      <button class="btn" id="logBtn">${ui.histForm?"Close":"+ Log something I did"}</button></div>
+    ${form}
+    ${header}
+    ${grid}`;
+}
+
+function logForm(){
+  const dflt = localKey(new Date(ui.currentDate.getTime() - 86400000));
+  const isTask = ui.histKind === "task";
+  const isNew = ui.histNew;
+  let body;
+  if (isNew) {
+    body = `<div class="row"><label>Name</label><input type="text" id="lfName" placeholder="${isTask?'e.g. Cleaned the gutters':'e.g. Evening walk'}" style="flex:1"></div>
+      <div class="row"><label>Container</label><select id="lfCont">${contOptions(S.miscId)}</select></div>`;
+  } else if (isTask) {
+    const cid = (ui.lfCont && store.containers[ui.lfCont]) ? ui.lfCont : store.containerOrder[0];
+    const tasksIn = S.tasksAll.filter(t => t.containerId === cid);
+    const tOpts = tasksIn.map(t => `<option value="${t.id}">${esc(t.name)}${t.completed?" (done)":""}</option>`).join("");
+    body = `<div class="row"><label>Container</label><select id="lfTaskCont">${contOptions(cid)}</select></div>
+      <div class="row"><label>Task</label><select id="lfTask" style="flex:1">${tOpts||'<option value="">(no tasks here)</option>'}</select></div>`;
+  } else {
+    const rcid = (ui.lfRCont && store.containers[ui.lfRCont]) ? ui.lfRCont : store.containerOrder[0];
+    const rOpts = liveRoutines().filter(r => r.containerId === rcid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    body = `<div class="row"><label>Container</label><select id="lfRoutineCont">${contOptions(rcid)}</select></div>
+      <div class="row"><label>Routine</label><select id="lfRoutine" style="flex:1">${rOpts||'<option value="">(no routines here)</option>'}</select></div>`;
+  }
+  return `<div class="form" style="margin:0 0 16px">
+    <div class="row"><label>Type</label><div class="seg"><button class="${isTask?"on":""}" data-lkind="task">Task</button><button class="${!isTask?"on":""}" data-lkind="routine">Routine</button></div>
+      <label style="min-width:auto">New</label><button class="toggle ${isNew?"on":""}" data-lnew><span class="knob"></span></button>
+      <label style="min-width:auto">Day</label><input type="date" id="lfDate" value="${dflt}" max="${dflt}"></div>
+    ${body}
+    <div class="row"><button class="btn primary sm" id="lfSaveDone">Log as done</button><button class="btn sm" id="lfSaveMiss">Log as not done</button></div>
+    <div class="desc" style="font-size:12px;color:var(--ink2)">"Not done" records that you meant to do it that day but didn't. ${isNew?"New items are created and linked.":"Logged against the existing "+(isTask?"task.":"routine.")}</div>
+  </div>`;
+}
+
+/* ---------- Settings ---------- */
+function viewSettings(){
+  const t = ui.settings.theme, sp = ui.settings.showPos;
+  return `<div class="head"><div><div class="eyebrow">Preferences</div><h1 class="htitle">Settings</h1></div></div>
+    <div class="sset">
+      <div class="ssection">Appearance</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Theme</div><div class="desc">Dark is the default.</div></div>
+        <div class="seg"><button class="${t==="dark"?"on":""}" data-theme="dark">Dark</button><button class="${t==="light"?"on":""}" data-theme="light">Light</button></div></div></div>
+      <div class="ssection">Display</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Show task positions in a single container</div>
+        <div class="desc">When viewing one container's board, show each task's global position number. Off keeps it calmer.</div></div>
+        <button class="toggle ${sp?"on":""}" id="posToggle"><span class="knob"></span></button></div></div>
+      <div class="ssection">Data</div>
+      <div class="scard">
+        <div class="srow"><div><div class="lbl">Export database</div>
+          <div class="desc">Download your data as a .db file. Open it in the desktop app or import it back here.</div></div>
+          <button class="btn sm primary" id="exportDbBtn">Export .db</button></div>
+        <div class="srow"><div><div class="lbl">Import database</div>
+          <div class="desc">Replace local data with a .db file from the desktop app. <span id="importMsg"></span></div></div>
+          <label class="btn sm" style="cursor:pointer">Import .db<input type="file" id="importDbFile" accept=".db" style="display:none"></label></div></div>
+      <div class="ssection">About</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core.</div></div>
+        <span class="sver">${esc(S.version)}</span></div></div>
+    </div>`;
+}
+
+/* ---------- context export ---------- */
+async function openExport(){
+  const text = await api.context_export(curKey());
+  const v = document.createElement("div"); v.className = "veil";
+  v.innerHTML = `<div class="modal"><div class="mh"><span class="t">Context for chat</span><button class="x" id="mClose">×</button></div>
+    <div class="mb"><p style="margin:0 0 12px;color:var(--ink2);font-size:13px">The text seam the AI layer will attach to later.</p>
+    <textarea id="expText" readonly>${esc(text)}</textarea>
+    <div style="margin-top:12px"><button class="btn primary sm" id="mCopy">Copy</button></div></div></div>`;
+  document.body.appendChild(v);
+  v.addEventListener("click", e => { if (e.target === v) v.remove(); });
+  v.querySelector("#mClose").onclick = () => v.remove();
+  v.querySelector("#mCopy").onclick = () => { const ta = v.querySelector("#expText"); ta.select(); try { document.execCommand("copy"); } catch(e){} v.querySelector("#mCopy").textContent = "Copied"; };
+}
+
+/* ===================== render + events ===================== */
+const VIEWS = { today:viewToday, tasks:viewTasks, routines:viewRoutines, containers:viewContainers, history:viewHistory, settings:viewSettings };
+function render(){ store = buildStore(); renderNav(); document.getElementById("main").innerHTML = VIEWS[ui.view](); wire(); }
+async function go(v){
+  ui.view = v;
+  // Entering Today after acting elsewhere: make sure the snapshot reflects the viewed day.
+  if (v === "today" && S.todayKey !== viewedKey()) S = await api.get_state(curKey(), viewedKey());
+  // The calendar needs the live day's stats; make sure the snapshot is the live day.
+  if (v === "history" && S.todayKey !== curKey()) S = await api.get_state(curKey());
+  render();
+}
+
+function wire(){
+  document.querySelectorAll("[data-nav]").forEach(b => b.onclick = () => go(b.dataset.nav));
+  document.querySelectorAll("[data-scope]").forEach(b => b.onclick = () => { const [k,v] = b.dataset.scope.split(":"); if (k==="task") ui.taskScope = v; else ui.routineScope = v; render(); });
+  ({ today:wireToday, tasks:wireTasks, routines:wireRoutines, containers:wireContainers, history:wireHistory, settings:wireSettings }[ui.view])();
+}
+
+function wireToday(){
+  const prev = document.getElementById("dayPrev"); if (prev) prev.onclick = () => gotoDay(-1);
+  const next = document.getElementById("dayNext"); if (next) next.onclick = () => gotoDay(1);
+  const jump = document.getElementById("dayToday"); if (jump) jump.onclick = () => gotoDay(0);
+  const bf = document.getElementById("backfillBtn"); if (bf) bf.onclick = async () => { S = await api.backfill_day(curKey(), viewedKey()); render(); };
+  const capEl = document.getElementById("capIn");
+  if (capEl) {
+    const cap = async () => { const i = document.getElementById("capIn"); const v = i.value.trim(); if (!v) return; S = await api.capture_task(v, curKey()); render(); const ni = document.getElementById("capIn"); if (ni) ni.focus(); };
+    capEl.addEventListener("keydown", e => { if (e.key === "Enter") cap(); });
+  }
+  document.querySelectorAll("[data-check]").forEach(el => el.onclick = () => apply(api.toggle_today_item(el.dataset.check, curKey(), viewedKey())));
+  document.querySelectorAll("[data-tname]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tname); if (!x || x.done) return; editItemName(el, x); });
+  document.querySelectorAll("[data-tcont]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tcont); if (!x) return; editItemContainer(el, x); });
+  if (ui.oneoffOpen) {
+    const oc = document.getElementById("ooCont"); if (oc) oc.onchange = () => { ui.ooCont = Number(oc.value); render(); };
+    const ooAdd = document.getElementById("ooAdd"); if (ooAdd) ooAdd.onclick = () => { const rid = document.getElementById("ooSel").value; if (rid) { ui.oneoffOpen = false; apply(api.add_one_off(rid, curKey())); } };
+    const ooCancel = document.getElementById("ooCancel"); if (ooCancel) ooCancel.onclick = () => { ui.oneoffOpen = false; render(); };
+  } else {
+    const ooOpen = document.getElementById("ooOpen"); if (ooOpen) ooOpen.onclick = () => { ui.oneoffOpen = true; render(); };
+  }
+  enableListReorder();
+}
+async function gotoDay(delta){
+  ui.viewedDate = delta === 0 ? new Date(ui.currentDate.getTime())
+                              : new Date(ui.viewedDate.getTime() + delta * 86400000);
+  ui.oneoffOpen = false;
+  S = await api.get_state(curKey(), viewedKey());
+  render();
+}
+function editItemName(el, it){
+  const inp = mkInput(it.name); el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_item(it.id, v, curKey(), viewedKey())); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+function editItemContainer(el, it){
+  const sel = document.createElement("select"); sel.className = "selp"; sel.innerHTML = contOptions(it.containerId);
+  el.replaceWith(sel); sel.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; apply(api.set_item_container(it.id, Number(sel.value), curKey(), viewedKey())); };
+  sel.addEventListener("change", commit);
+  sel.addEventListener("blur", () => { if (!done) render(); });
+}
+
+function wireTasks(){
+  document.querySelectorAll("[data-add]").forEach(b => b.onclick = () => startAddCard(b));
+  document.querySelectorAll("[data-rename]").forEach(el => el.onclick = () => startRenameCard(el));
+  document.querySelectorAll("[data-ccont]").forEach(el => el.onclick = e => { e.stopPropagation(); editCardContainer(el); });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = e => { e.stopPropagation(); deleteTaskPrompt(b.dataset.del); });
+  enableBoardDnD();
+}
+function startAddCard(btn){
+  const col = btn.dataset.add;
+  const cid = ui.taskScope === "all" ? S.miscId : Number(ui.taskScope);
+  const box = document.querySelector(`[data-cards="${col}"]`);
+  const holder = document.createElement("div"); holder.className = "card";
+  const inp = mkInput(""); holder.appendChild(inp); box.appendChild(holder); inp.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.add_task(v, cid, col, curKey())); else holder.remove(); };
+  const cancel = () => { if (done) return; done = true; holder.remove(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); });
+  inp.addEventListener("blur", commit);
+}
+function deleteTaskPrompt(id){
+  const t = store.tasks[id]; if (!t) return; const n = t.logCount;
+  let ok;
+  if (n > 0) ok = confirm(`"${t.name}" has ${n} history entr${n===1?"y":"ies"}.\n\nOK = delete the task and its history.\nCancel = keep it.`);
+  else ok = confirm(`Delete "${t.name}"?`);
+  if (ok) apply(api.delete_task(id, curKey()));
+}
+function startRenameCard(el){
+  const id = el.dataset.rename, t = store.tasks[id]; if (!t) return;
+  const card = el.closest(".card"); if (card) card.draggable = false;
+  const inp = mkInput(t.name); el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_task(id, v, curKey())); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+function editCardContainer(el){
+  const id = el.dataset.ccont, t = store.tasks[id]; const card = el.closest(".card"); if (card) card.draggable = false;
+  const sel = document.createElement("select"); sel.className = "selp"; sel.innerHTML = contOptions(t.containerId);
+  el.replaceWith(sel); sel.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; apply(api.set_task_container(id, Number(sel.value), curKey())); };
+  sel.addEventListener("change", commit);
+  sel.addEventListener("blur", () => { if (!done) render(); });
+}
+
+function wireRoutines(){
+  document.querySelectorAll("[data-raddc]").forEach(b => b.onclick = () => startAddRoutine(b));
+  document.querySelectorAll("[data-rtoggle]").forEach(b => b.onclick = () => { const r = store.routines[b.dataset.rtoggle]; apply(api.set_routine_active(b.dataset.rtoggle, !r.active, curKey())); });
+  document.querySelectorAll("[data-rday]").forEach(el => el.onclick = () => { const [id,day] = el.dataset.rday.split(":"); apply(api.toggle_routine_day(id, Number(day), curKey())); });
+  document.querySelectorAll("[data-rtime]").forEach(el => el.onclick = () => startTimeEdit(el));
+  document.querySelectorAll("[data-rdur]").forEach(el => el.onclick = () => startDurEdit(el));
+  document.querySelectorAll("[data-oneoff]").forEach(b => b.onclick = async () => { ui.viewedDate = new Date(ui.currentDate.getTime()); S = await api.add_one_off(b.dataset.oneoff, curKey()); go("today"); });
+  document.querySelectorAll("[data-arch]").forEach(b => b.onclick = () => apply(api.archive_routine(b.dataset.arch, curKey())));
+  document.querySelectorAll("[data-unarch]").forEach(b => b.onclick = () => apply(api.unarchive_routine(b.dataset.unarch, curKey())));
+  document.querySelectorAll("[data-rdel]").forEach(b => b.onclick = () => deleteRoutinePrompt(b.dataset.rdel));
+  document.querySelectorAll("[data-rname]").forEach(el => el.onclick = e => { if (e.target.closest("[data-rgrip]")) return; startRenameRoutine(el); });
+  enableRoutineDnD();
+}
+function startAddRoutine(btn){
+  const cid = Number(btn.dataset.raddc);
+  const inp = mkInput(""); btn.replaceWith(inp); inp.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.add_routine(v, cid, curKey())); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+function deleteRoutinePrompt(id){
+  const r = store.routines[id]; if (!r) return; const n = r.logCount;
+  let ok;
+  if (n > 0) ok = confirm(`"${r.name}" has ${n} history entr${n===1?"y":"ies"}.\n\nOK = delete the routine and its history.\nCancel = keep it (consider archiving instead).`);
+  else ok = confirm(`Delete "${r.name||"this routine"}"?`);
+  if (ok) apply(api.delete_routine(id, curKey()));
+}
+function startRenameRoutine(el){
+  const id = el.dataset.rname, r = store.routines[id]; if (!r) return;
+  const row = el.closest(".rrow"); if (row) row.draggable = false;
+  const inp = mkInput(r.name); el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.rename_routine(id, v, curKey())); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+function startTimeEdit(el){
+  const id = el.dataset.rtime, r = store.routines[id];
+  const inp = document.createElement("input"); inp.type = "time"; inp.className = "cellinp"; if (r.time) inp.value = r.time;
+  el.textContent = ""; el.appendChild(inp); inp.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; apply(api.set_routine_time(id, inp.value || null, curKey())); };
+  inp.addEventListener("blur", commit);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+}
+function startDurEdit(el){
+  const id = el.dataset.rdur, r = store.routines[id];
+  const inp = document.createElement("input"); inp.className = "cellinp"; inp.type = "number"; inp.min = "0"; inp.step = "0.25"; inp.placeholder = "hours";
+  if (r.durationHours != null) inp.value = r.durationHours;
+  el.textContent = ""; el.appendChild(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value; apply(api.set_routine_duration(id, v === "" ? null : Number(v), curKey())); };
+  inp.addEventListener("blur", commit);
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+}
+
+function wireContainers(){
+  document.querySelectorAll("[data-cadd]").forEach(b => b.onclick = () => startAddContainer(b));
+  document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => deleteContainerPrompt(b.dataset.cdel));
+  enableContainerDnD();
+}
+function startAddContainer(btn){
+  const st = btn.dataset.cadd || "active";
+  const inp = mkInput(""); btn.replaceWith(inp); inp.focus();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v) apply(api.add_container(v, curKey(), st)); else render(); };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") render(); });
+  inp.addEventListener("blur", commit);
+}
+async function deleteContainerPrompt(id){
+  const c = store.containers[id]; if (!c) return;
+  const tn = c.taskCount || 0, rn = c.routineCount || 0;
+  let detail;
+  if (tn || rn) {
+    const parts = [];
+    if (tn) parts.push(`${tn} task${tn===1?"":"s"}`);
+    if (rn) parts.push(`${rn} routine${rn===1?"":"s"}`);
+    detail = `\n\nThis also permanently deletes its ${parts.join(" and ")} and all of their history. This cannot be undone.`;
+  } else {
+    detail = `\n\nThis cannot be undone.`;
+  }
+  if (!confirm(`Delete the "${c.name}" area?${detail}`)) return;
+  const res = await api.delete_container(id, curKey());
+  if (res && res.ok) { S = res.state; render(); }
+}
+
+function wireHistory(){
+  document.getElementById("logBtn").onclick = () => { ui.histForm = !ui.histForm; render(); };
+  const prev = document.getElementById("calPrev"); if (prev) prev.onclick = () => { ui.calDate = new Date(ui.calDate.getFullYear(), ui.calDate.getMonth() - 1, 1); render(); };
+  const next = document.getElementById("calNext"); if (next) next.onclick = () => { ui.calDate = new Date(ui.calDate.getFullYear(), ui.calDate.getMonth() + 1, 1); render(); };
+  const calT = document.getElementById("calToday"); if (calT) calT.onclick = () => { ui.calDate = new Date(ui.currentDate.getTime()); render(); };
+  document.querySelectorAll("[data-calday]").forEach(c => c.onclick = () => { ui.viewedDate = new Date(c.dataset.calday + "T00:00:00"); go("today"); });
+  if (ui.histForm) {
+    document.querySelectorAll("[data-lkind]").forEach(b => b.onclick = () => { ui.histKind = b.dataset.lkind; render(); });
+    const nt = document.querySelector("[data-lnew]"); if (nt) nt.onclick = () => { ui.histNew = !ui.histNew; render(); };
+    const tc = document.getElementById("lfTaskCont"); if (tc) tc.onchange = () => { ui.lfCont = Number(tc.value); render(); };
+    const rc = document.getElementById("lfRoutineCont"); if (rc) rc.onchange = () => { ui.lfRCont = Number(rc.value); render(); };
+    const doLog = async (done) => {
+      const dk = document.getElementById("lfDate").value; if (!dk || dk >= curKey()) return;
+      let res;
+      if (ui.histKind === "task") {
+        if (ui.histNew) {
+          const nm = document.getElementById("lfName").value.trim(); if (!nm) return;
+          const cid = Number(document.getElementById("lfCont").value);
+          res = await api.log_activity("task", true, nm, cid, null, dk, done, curKey());
+        } else {
+          const tid = document.getElementById("lfTask").value; if (!tid) return;
+          res = await api.log_activity("task", false, null, null, tid, dk, done, curKey());
+          if (res && res.ok === false && res.conflict === "taskDoneBefore") {
+            if (confirm(`"${res.taskName}" is marked done on ${dmy(res.doneDate)}, before ${dmy(dk)}. Logging it as not done here means it wasn't finished.\n\nOK = uncheck the ${dmy(res.doneDate)} completion and record this miss.\nCancel = leave it unchanged.`))
+              res = await api.log_activity("task", false, null, null, tid, dk, done, curKey(), true);
+            else return;
+          }
+        }
+      } else {
+        if (ui.histNew) {
+          const nm = document.getElementById("lfName").value.trim(); if (!nm) return;
+          const cid = Number(document.getElementById("lfCont").value);
+          res = await api.log_activity("routine", true, nm, cid, null, dk, done, curKey());
+        } else {
+          const rid = document.getElementById("lfRoutine").value; if (!rid) return;
+          res = await api.log_activity("routine", false, null, null, rid, dk, done, curKey());
+        }
+      }
+      if (res && res.state) S = res.state;
+      ui.histForm = false; render();
+    };
+    document.getElementById("lfSaveDone").onclick = () => doLog(true);
+    document.getElementById("lfSaveMiss").onclick = () => doLog(false);
+  }
+}
+
+function wireSettings(){
+  document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
+  document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
+  const expBtn = document.getElementById("exportDbBtn");
+  if (expBtn) expBtn.onclick = () => api.exportDb();
+  const impFile = document.getElementById("importDbFile");
+  if (impFile) impFile.onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const msg = document.getElementById("importMsg");
+    if (msg) msg.textContent = "Importing…";
+    await api.importDb(f);
+    S = await api.get_state(curKey());
+    if (msg) msg.textContent = "Done.";
+    render();
+  };
+}
+
+/* ---------- drag helpers (presentation only) ---------- */
+const ph = document.createElement("div"); ph.className = "drop-ph";
+function clearPh(){ if (ph.parentNode) ph.parentNode.removeChild(ph); }
+function positionPh(container, y, sel){ const items = [...container.querySelectorAll(sel + ":not(.dragging)")]; let before = null; for (const el of items) { const r = el.getBoundingClientRect(); if (y < r.top + r.height/2) { before = el; break; } } if (before) container.insertBefore(ph, before); else container.appendChild(ph); }
+function insertionIndexDOM(container, y, sel){ const items = [...container.querySelectorAll(sel + ":not(.dragging)")]; for (let i = 0; i < items.length; i++) { const r = items[i].getBoundingClientRect(); if (y < r.top + r.height/2) return i; } return items.length; }
+function phSlot(container, sel){ if (ph.parentNode !== container) return -1; const kids = [...container.children].filter(c => c === ph || (c.matches && c.matches(sel) && !c.classList.contains("dragging"))); return kids.indexOf(ph); }
+
+let dragId = null;
+function enableBoardDnD(){
+  document.querySelectorAll(".card").forEach(card => {
+    card.addEventListener("dragstart", e => { dragId = card.dataset.card; card.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+    card.addEventListener("dragend", () => { dragId = null; document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); clearPh(); document.querySelectorAll(".col.over").forEach(c => c.classList.remove("over")); });
+  });
+  document.querySelectorAll(".col").forEach(col => {
+    const box = col.querySelector(".cards");
+    col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("over"); positionPh(box, e.clientY, ".card"); });
+    col.addEventListener("dragleave", e => { if (!col.contains(e.relatedTarget)) { col.classList.remove("over"); if (ph.parentNode === box) clearPh(); } });
+    col.addEventListener("drop", e => { e.preventDefault(); col.classList.remove("over"); if (!dragId) return; let idx = phSlot(box, ".card"); if (idx < 0) idx = insertionIndexDOM(box, e.clientY, ".card"); const id = dragId; clearPh(); apply(api.move_task(id, col.dataset.col, idx, curKey())); });
+  });
+  const dz = document.querySelector("[data-done]");
+  if (dz) {
+    dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+    dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); clearPh(); if (dragId) { const id = dragId; apply(api.complete_task_today(id, curKey())); } });
+  }
+}
+
+let dragKey = null;
+function enableListReorder(){
+  const list = document.getElementById("todayList"); if (!list) return;
+  list.querySelectorAll(".titem").forEach(row => {
+    const grip = row.querySelector("[data-grip]"); if (grip) grip.addEventListener("mousedown", () => { row.draggable = true; });
+    row.addEventListener("dragstart", e => { dragKey = row.dataset.key; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragend", () => { row.draggable = false; dragKey = null; row.classList.remove("dragging"); clearPh(); });
+  });
+  list.addEventListener("dragover", e => { e.preventDefault(); positionPh(list, e.clientY, ".titem"); });
+  list.addEventListener("drop", e => {
+    e.preventDefault(); if (!dragKey) return;
+    let idx = phSlot(list, ".titem"); if (idx < 0) idx = insertionIndexDOM(list, e.clientY, ".titem"); const id = dragKey; clearPh();
+    apply(api.reorder_today_item(id, idx, curKey(), viewedKey()));
+  });
+}
+
+let dragRoutine = null;
+function enableRoutineDnD(){
+  document.querySelectorAll(".rrow[data-rrow]").forEach(row => {
+    const grip = row.querySelector("[data-rgrip]"); if (grip) grip.addEventListener("mousedown", () => { row.draggable = true; });
+    row.addEventListener("dragstart", e => { dragRoutine = row.dataset.rrow; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragend", () => { row.draggable = false; dragRoutine = null; row.classList.remove("dragging"); clearPh(); });
+  });
+  document.querySelectorAll("[data-rgroup]").forEach(list => {
+    list.addEventListener("dragover", e => { e.preventDefault(); positionPh(list, e.clientY, ".rrow[data-rrow]"); });
+    list.addEventListener("drop", e => { e.preventDefault(); if (dragRoutine == null) { clearPh(); return; } const cid = Number(list.dataset.rgroup); let idx = phSlot(list, ".rrow[data-rrow]"); if (idx < 0) idx = insertionIndexDOM(list, e.clientY, ".rrow[data-rrow]"); const id = dragRoutine; clearPh(); apply(api.reorder_routine(id, cid, idx, curKey())); });
+  });
+}
+
+let dragCont = null;
+function enableContainerDnD(){
+  document.querySelectorAll(".crow").forEach(row => {
+    row.addEventListener("dragstart", e => { dragCont = row.dataset.cont; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragend", () => { dragCont = null; row.classList.remove("dragging"); clearPh(); });
+  });
+  document.querySelectorAll("[data-cgroup]").forEach(list => {
+    list.addEventListener("dragover", e => { e.preventDefault(); positionPh(list, e.clientY, ".crow"); });
+    list.addEventListener("drop", e => { e.preventDefault(); if (dragCont == null) { clearPh(); return; } const st = list.dataset.cgroup; let idx = phSlot(list, ".crow"); if (idx < 0) idx = insertionIndexDOM(list, e.clientY, ".crow"); const id = dragCont; clearPh(); apply(api.reorder_container(id, st, idx, curKey())); });
+  });
+}
+
+let dragHist = null;
+function enableHistoryDnD(){
+  document.querySelectorAll(".hentry").forEach(row => {
+    const grip = row.querySelector("[data-hgrip]"); if (grip) grip.addEventListener("mousedown", () => { row.draggable = true; });
+    row.addEventListener("dragstart", e => { dragHist = { k: row.dataset.hkey, id: row.dataset.hid }; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+    row.addEventListener("dragend", () => { row.draggable = false; dragHist = null; row.classList.remove("dragging"); clearPh(); });
+  });
+  document.querySelectorAll("[data-hday]").forEach(list => {
+    list.addEventListener("dragover", e => { e.preventDefault(); positionPh(list, e.clientY, ".hentry"); });
+    list.addEventListener("drop", async e => {
+      e.preventDefault(); if (!dragHist) { clearPh(); return; }
+      const toKey = list.dataset.hday; let idx = phSlot(list, ".hentry"); if (idx < 0) idx = insertionIndexDOM(list, e.clientY, ".hentry"); const from = dragHist; clearPh();
+      const res = await api.move_item_to(from.id, from.k, toKey, idx, curKey());
+      S = res.state; render();
+      if (res.laterConflict) {
+        const clear = confirm(`This completed entry now sits before later unfinished records of the same task. A task has only one completion.\n\nOK = clear those later unfinished records.\nCancel = uncheck this entry instead (keep the others).`);
+        S = await api.resolve_later_conflict(res.itemId, res.toKey, clear, curKey()); render();
+      }
+    });
+  });
+}
+
+document.getElementById("settingsBtn").onclick = () => go("settings");
+document.getElementById("exportBtn").onclick = openExport;
+
+/* ---------- boot: initialise web API ---------- */
+async function boot(){
+  api = await createWebApi();
+  S = await api.get_state(curKey());
+  applyTheme();
+  render();
+}
+window.addEventListener('load', boot);
+</script>
+<script src="./vendor/sql-wasm.js"></script>
+<script src="./js/engine.js"></script>
+<script src="./js/storage.js"></script>
+<script src="./js/api.js"></script>
+<script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');</script>
+</body>
+</html>
