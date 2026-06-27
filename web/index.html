@@ -590,7 +590,7 @@ function viewSettings(){
         <div class="desc">Add Steward to your home screen as a standalone app.</div></div>
         <button class="btn sm primary" id="installAppBtn">Install</button></div></div>` : ''}
       <div class="ssection">About</div>
-      <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core.</div></div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core. PWA prompt: ${deferredInstallPrompt ? 'ready' : 'not received'}.</div></div>
         <span class="sver">${esc(S.version)}</span></div></div>
     </div>`;
 }
