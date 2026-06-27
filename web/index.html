@@ -861,7 +861,7 @@ function wireSettings(){
       deferredInstallPrompt = null;
       render();
     } else {
-      document.getElementById("installMsg").textContent = "Not available — browser install prompt not received. Try Chrome menu → Install app.";
+      alert("Install prompt not available.\n\nPWA prompt: " + (deferredInstallPrompt ? "ready" : "not received") + "\n\nTry: Chrome menu ⋮ → Install app, or look for an install icon in the address bar.");
     }
   };
   const expBtn = document.getElementById("exportDbBtn");
