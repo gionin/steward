@@ -276,6 +276,9 @@
 let api = null;     // window.pywebview.api
 let S = null;       // latest snapshot from Python
 let store = null;   // thin read-only facade over S (see buildStore)
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstallPrompt = e; if (ui && ui.view === 'settings') render(); });
+window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; });
 
 const COLUMNS = ["Idea", "Planned", "Soon", "Ready"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -582,6 +585,10 @@ function viewSettings(){
         <div class="srow"><div><div class="lbl">Import database</div>
           <div class="desc">Replace local data with a .db file from the desktop app. <span id="importMsg"></span></div></div>
           <label class="btn sm" style="cursor:pointer">Import .db<input type="file" id="importDbFile" accept=".db" style="display:none"></label></div></div>
+      ${deferredInstallPrompt ? `<div class="ssection">App</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Install app</div>
+        <div class="desc">Add Steward to your home screen as a standalone app.</div></div>
+        <button class="btn sm primary" id="installAppBtn">Install</button></div></div>` : ''}
       <div class="ssection">About</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core.</div></div>
         <span class="sver">${esc(S.version)}</span></div></div>
@@ -846,6 +853,8 @@ function wireHistory(){
 function wireSettings(){
   document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
   document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
+  const installBtn = document.getElementById("installAppBtn");
+  if (installBtn) installBtn.onclick = async () => { if (!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; render(); };
   const expBtn = document.getElementById("exportDbBtn");
   if (expBtn) expBtn.onclick = () => api.exportDb();
   const impFile = document.getElementById("importDbFile");
