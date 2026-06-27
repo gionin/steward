@@ -587,8 +587,8 @@ function viewSettings(){
           <label class="btn sm" style="cursor:pointer">Import .db<input type="file" id="importDbFile" accept=".db" style="display:none"></label></div></div>
       <div class="ssection">App</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Install app</div>
-        <div class="desc">${deferredInstallPrompt ? 'Tap Install to add Steward to your home screen.' : 'Use Chrome\'s menu → Install app, or look for the install icon in the address bar.'}</div></div>
-        ${deferredInstallPrompt ? '<button class="btn sm primary" id="installAppBtn">Install</button>' : ''}</div></div>
+        <div class="desc">Add Steward to your home screen as a standalone app. <span id="installMsg"></span></div></div>
+        <button class="btn sm primary" id="installAppBtn">Install</button></div></div>
       <div class="ssection">About</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core. PWA prompt: ${deferredInstallPrompt ? 'ready' : 'not received'}.</div></div>
         <span class="sver">${esc(S.version)}</span></div></div>
@@ -854,7 +854,16 @@ function wireSettings(){
   document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
   document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
   const installBtn = document.getElementById("installAppBtn");
-  if (installBtn) installBtn.onclick = async () => { if (!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; render(); };
+  if (installBtn) installBtn.onclick = async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      render();
+    } else {
+      document.getElementById("installMsg").textContent = "Not available — browser install prompt not received. Try Chrome menu → Install app.";
+    }
+  };
   const expBtn = document.getElementById("exportDbBtn");
   if (expBtn) expBtn.onclick = () => api.exportDb();
   const impFile = document.getElementById("importDbFile");
