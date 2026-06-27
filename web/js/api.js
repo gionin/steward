@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  const APP_VERSION = "0.01.01h-web";
+  const APP_VERSION = "0.01.01i-web";
 
   async function createWebApi() {
     const { COLUMNS, WEEKDAYS, _dateFromKey } = window.StewardEngine;
