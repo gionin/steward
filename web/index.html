@@ -9,6 +9,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Steward</title>
+<script>
+  // Capture beforeinstallprompt as early as possible — Chrome may fire it
+  // before DOMContentLoaded. Body script picks it up via window._earlyInstallPrompt.
+  window.addEventListener('beforeinstallprompt', function(e) {
+    window._earlyInstallPrompt = e;
+  });
+</script>
 <style>
   :root{
     --paper:#1A1714; --surface:#221F1A; --surface2:#1E1B16;
@@ -276,7 +283,7 @@
 let api = null;     // window.pywebview.api
 let S = null;       // latest snapshot from Python
 let store = null;   // thin read-only facade over S (see buildStore)
-let deferredInstallPrompt = null;
+let deferredInstallPrompt = window._earlyInstallPrompt || null;
 window.addEventListener('beforeinstallprompt', e => { deferredInstallPrompt = e; if (ui && ui.view === 'settings') render(); });
 window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; });
 
