@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="manifest" href="./manifest.webmanifest">
+<link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1A1714">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -869,12 +869,15 @@ function wireSettings(){
       render();
     } else {
       const swCtrl = navigator.serviceWorker.controller;
+      let mfCT = "?";
+      try { const r = await fetch('./manifest.json', {cache:'no-store'}); mfCT = r.headers.get('content-type') || 'null'; } catch(e) { mfCT = 'fetch error'; }
       alert(
         "PWA prompt: not received\n" +
         "SW controller: " + (swCtrl ? swCtrl.state : "none") + "\n" +
         "Display mode: " + (window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser") + "\n" +
         "HTTPS: " + (location.protocol === "https:") + "\n" +
-        "URL: " + location.href
+        "URL: " + location.href + "\n" +
+        "Manifest CT: " + mfCT
       );
     }
   };
