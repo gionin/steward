@@ -10,7 +10,7 @@ echo.
 call :find_python
 if not defined PY (
   call :install_python
-  call :find_python
+  if not defined PY call :find_python
 )
 
 if not defined PY (
@@ -108,9 +108,12 @@ echo Installing Python (this may take a minute)...
 "%INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1
 del /q "%INSTALLER%" 2>nul
 
-:: Refresh PATH in this session so python is visible without reopening cmd
-for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USR_PATH=%%B"
-set "PATH=%SYS_PATH%;%USR_PATH%"
-echo Python installation complete.
+:: Point PY directly at the known install location so we don't need a PATH refresh
+set "PYDIR=%LOCALAPPDATA%\Programs\Python\Python312"
+if exist "%PYDIR%\python.exe" (
+  set "PY=%PYDIR%\python.exe"
+  echo Python installation complete.
+) else (
+  echo Python installation complete. Re-run this script if setup fails.
+)
 exit /b 0
