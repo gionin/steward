@@ -6,28 +6,19 @@ echo   Steward  -  setup (run this once)
 echo ============================================
 echo.
 
-:: ── Check for Python ──────────────────────────────────────────────────────────
-set "PY="
-where py >nul 2>nul && set "PY=py -3"
+:: ── Detect a real Python (ignore the Windows Store stub) ─────────────────────
+call :find_python
 if not defined PY (
-  where python >nul 2>nul && set "PY=python"
+  call :install_python
+  call :find_python
 )
 
 if not defined PY (
-  echo [!] Python was not found on this computer.
   echo.
-  echo     Please install Python 3 from:
+  echo [!] Python still not found after install attempt.
+  echo     Please restart this script, or install manually from:
   echo       https://www.python.org/downloads/
-  echo.
-  echo     IMPORTANT: on the installer's first page, tick
-  echo       "Add Python to PATH"  before clicking Install.
-  echo.
-  set /p "OPEN=Open the download page now in your browser? [Y/n]: "
-  if /i not "%OPEN%"=="n" (
-    start "" "https://www.python.org/downloads/"
-  )
-  echo.
-  echo Re-run this script after Python is installed.
+  echo     and tick "Add Python to PATH".
   pause
   exit /b 1
 )
@@ -41,7 +32,6 @@ echo.
 if errorlevel 1 (
   echo.
   echo [!] Could not create the virtual environment.
-  echo     Make sure Python 3.3 or later is installed correctly.
   pause
   exit /b 1
 )
@@ -50,7 +40,6 @@ if errorlevel 1 (
 echo Upgrading pip...
 .venv\Scripts\python -m pip install --upgrade pip
 if errorlevel 1 (
-  echo.
   echo [!] pip upgrade failed. See the messages above.
   pause
   exit /b 1
@@ -60,7 +49,6 @@ if errorlevel 1 (
 echo Installing dependencies...
 .venv\Scripts\python -m pip install pywebview
 if errorlevel 1 (
-  echo.
   echo [!] Installing pywebview failed. See the messages above.
   pause
   exit /b 1
@@ -71,3 +59,68 @@ echo ============================================
 echo   Setup complete. Double-click run.bat to start.
 echo ============================================
 pause
+exit /b 0
+
+
+:: ─────────────────────────────────────────────────────────────────────────────
+:find_python
+set "PY="
+for %%C in (py python python3) do (
+  if not defined PY (
+    where %%C >nul 2>nul && (
+      %%C --version >nul 2>nul && set "PY=%%C"
+    )
+  )
+)
+exit /b 0
+
+
+:: ─────────────────────────────────────────────────────────────────────────────
+:install_python
+echo [!] Python was not found on this computer.
+echo.
+set /p "AUTO=Install Python automatically now? [Y/n]: "
+if /i "%AUTO%"=="n" (
+  echo.
+  echo Please install Python 3 from https://www.python.org/downloads/
+  echo Tick "Add Python to PATH", then re-run this script.
+  pause
+  exit /b 0
+)
+
+:: Try winget first (built into Windows 10 1709+ and Windows 11)
+where winget >nul 2>nul
+if not errorlevel 1 (
+  echo.
+  echo Installing Python via winget...
+  winget install --id Python.Python.3 --source winget --accept-package-agreements --accept-source-agreements
+  if not errorlevel 1 (
+    echo.
+    echo Python installed. Refreshing PATH...
+    :: Refresh PATH so this session can see the new install
+    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
+    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USR_PATH=%%B"
+    set "PATH=%SYS_PATH%;%USR_PATH%"
+    exit /b 0
+  )
+  echo winget install failed, trying manual download...
+)
+
+:: Fallback: download the official installer via PowerShell
+echo.
+echo Downloading Python installer from python.org...
+set "INSTALLER=%TEMP%\python_setup.exe"
+powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe' -OutFile '%INSTALLER%'"
+if not exist "%INSTALLER%" (
+  echo [!] Download failed. Please install Python manually from https://www.python.org/downloads/
+  pause
+  exit /b 0
+)
+echo Running installer (this may take a minute)...
+"%INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1
+del /q "%INSTALLER%" 2>nul
+:: Refresh PATH
+for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
+for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USR_PATH=%%B"
+set "PATH=%SYS_PATH%;%USR_PATH%"
+exit /b 0
