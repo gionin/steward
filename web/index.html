@@ -597,7 +597,7 @@ function viewSettings(){
         <div class="desc">Add Steward to your home screen as a standalone app. <span id="installMsg"></span></div></div>
         <button class="btn sm primary" id="installAppBtn">Install</button></div></div>
       <div class="ssection">About</div>
-      <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core. PWA prompt: ${deferredInstallPrompt ? 'ready' : 'not received'}.</div></div>
+      <div class="scard"><div class="srow"><div><div class="lbl">Version</div><div class="desc">Steward — deterministic core.</div></div>
         <span class="sver">${esc(S.version)}</span></div></div>
     </div>`;
 }
@@ -868,17 +868,8 @@ function wireSettings(){
       deferredInstallPrompt = null;
       render();
     } else {
-      const swCtrl = navigator.serviceWorker.controller;
-      let mfCT = "?";
-      try { const r = await fetch('./manifest.json', {cache:'no-store'}); mfCT = r.headers.get('content-type') || 'null'; } catch(e) { mfCT = 'fetch error'; }
-      alert(
-        "PWA prompt: not received\n" +
-        "SW controller: " + (swCtrl ? swCtrl.state : "none") + "\n" +
-        "Display mode: " + (window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "browser") + "\n" +
-        "HTTPS: " + (location.protocol === "https:") + "\n" +
-        "URL: " + location.href + "\n" +
-        "Manifest CT: " + mfCT
-      );
+      const msg = document.getElementById("installMsg");
+      if (msg) { msg.textContent = "Use Chrome menu → Share → Add to Home Screen."; setTimeout(() => { msg.textContent = ""; }, 5000); }
     }
   };
   const expBtn = document.getElementById("exportDbBtn");
