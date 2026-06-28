@@ -354,6 +354,7 @@ function viewToday(){
       <span class="cbox ${done?"done":""}" data-check="${it.id}">${done?"✓":""}</span>
       <span class="tname" data-tname="${it.id}">${esc(it.name)}</span>
       <span class="meta">${it.oneOff&&it.sourceType==="routine"?'<span class="tag">one-off</span>':""}${it.recurring?'<span class="recur" title="routine">↻</span>':""}<span class="chip cont" data-tcont="${it.id}">${esc(it.container)}</span></span>
+      <button class="hdel" data-delitem="${it.id}" title="Remove from today">×</button>
     </div>`;
   }).join("");
 
@@ -626,6 +627,7 @@ function wireToday(){
   document.querySelectorAll("[data-check]").forEach(el => el.onclick = () => apply(api.toggle_today_item(el.dataset.check, curKey(), viewedKey())));
   document.querySelectorAll("[data-tname]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tname); if (!x || x.done) return; editItemName(el, x); });
   document.querySelectorAll("[data-tcont]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tcont); if (!x) return; editItemContainer(el, x); });
+  document.querySelectorAll("[data-delitem]").forEach(el => el.onclick = e => { e.stopPropagation(); apply(api.remove_item(el.dataset.delitem, viewedKey(), curKey())); });
   if (ui.oneoffOpen) {
     const oc = document.getElementById("ooCont"); if (oc) oc.onchange = () => { ui.ooCont = Number(oc.value); render(); };
     const ooAdd = document.getElementById("ooAdd"); if (ooAdd) ooAdd.onclick = () => { const rid = document.getElementById("ooSel").value; if (rid) { ui.oneoffOpen = false; apply(api.add_one_off(rid, curKey())); } };
