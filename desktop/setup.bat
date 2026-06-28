@@ -88,37 +88,29 @@ if /i "%AUTO%"=="n" (
   exit /b 0
 )
 
-:: Try winget first (built into Windows 10 1709+ and Windows 11)
-where winget >nul 2>nul
-if not errorlevel 1 (
-  echo.
-  echo Installing Python via winget...
-  winget install --id Python.Python.3 --source winget --accept-package-agreements --accept-source-agreements
-  if not errorlevel 1 (
-    echo.
-    echo Python installed. Refreshing PATH...
-    for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
-    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USR_PATH=%%B"
-    set "PATH=%SYS_PATH%;%USR_PATH%"
-    exit /b 0
-  )
-  echo winget install failed, trying manual download...
-)
-
-:: Fallback: download the official installer via PowerShell
+:: Download the official installer via PowerShell
 echo.
-echo Downloading Python installer from python.org...
+echo Downloading Python 3.12 installer from python.org (this may take a moment)...
 set "INSTALLER=%TEMP%\python_setup.exe"
-powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe' -OutFile '%INSTALLER%'"
+powershell -NoProfile -Command ^
+  "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
+  "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.9/python-3.12.9-amd64.exe' -OutFile '%INSTALLER%'"
 if not exist "%INSTALLER%" (
-  echo [!] Download failed. Please install Python manually from https://www.python.org/downloads/
+  echo.
+  echo [!] Download failed. Please install Python manually from:
+  echo       https://www.python.org/downloads/
+  echo     Tick "Add Python to PATH", then re-run this script.
   pause
   exit /b 0
 )
-echo Running installer (this may take a minute)...
+
+echo Installing Python (this may take a minute)...
 "%INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_launcher=1
 del /q "%INSTALLER%" 2>nul
+
+:: Refresh PATH in this session so python is visible without reopening cmd
 for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
 for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USR_PATH=%%B"
 set "PATH=%SYS_PATH%;%USR_PATH%"
+echo Python installation complete.
 exit /b 0
