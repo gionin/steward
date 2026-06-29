@@ -285,6 +285,7 @@ const ui = {
   settings: { theme: "dark", showPos: false, dayStartTime: "00:00" },
   histForm: false, histKind: "task", histNew: false,
   lfCont: null, lfRCont: null, ooCont: null, oneoffOpen: false,
+  futureCont: null, futureOneoffOpen: false, futureExistOpen: false,
 };
 
 function localKey(d){
@@ -364,7 +365,7 @@ function viewToday(){
     </div>`;
   }).join("");
 
-  const emptyMsg = isFuture ? "No routines scheduled for this day."
+  const emptyMsg = isFuture ? "Nothing scheduled for this day yet."
     : isPast ? "Nothing was tracked on this day."
     : "Nothing drafted for today. Add something below, or enjoy the quiet.";
   const body = items.length ? `<div class="list" id="todayList">${rows}</div>` : `<div class="empty">${emptyMsg}</div>`;
@@ -377,7 +378,7 @@ function viewToday(){
       ${isLive ? "" : `<button class="btn sm" id="dayToday">Jump to today</button>`}
     </div>`;
 
-  const note = isFuture ? "Scheduled ahead — the routines enabled for this day. You'll check things off when it arrives."
+  const note = isFuture ? `${items.filter(i=>!i.preview).length} scheduled · routines shown as preview`
     : isPast ? `${items.length} on record for this day.`
     : `${items.length} drafted · ${S.heldCount} held in other columns`;
 
@@ -391,6 +392,17 @@ function viewToday(){
     footer = `<div class="addrow"><span class="plus">+</span><input id="capIn" type="text" placeholder="Add a task for today…" autocomplete="off"></div>${oneoff}`;
   } else if (isPast) {
     footer = `<div class="oneoffbar"><button class="btn sm" id="backfillBtn">↻ Pull in this day's scheduled routines</button></div>`;
+  } else if (isFuture) {
+    const futureCid = (ui.futureCont && store.containers[ui.futureCont]) ? ui.futureCont : store.containerOrder[0];
+    const futureROpts = liveRoutines().filter(r => r.containerId === futureCid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    const taskOpts = S.tasksAll.filter(t => !t.completed).sort((a,b) => a.name.localeCompare(b.name)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
+    const oneoff = ui.futureOneoffOpen
+      ? `<div class="oneoffbar"><span>One-off:</span><select id="futOoCont">${contOptions(futureCid)}</select><select id="futOoSel" style="flex:1">${futureROpts||'<option value="">(none here)</option>'}</select><button class="btn sm primary" id="futOoAdd">Add</button><button class="btn sm" id="futOoCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="futOoOpen">↻ Add a one-off routine</button></div>`;
+    const existingSel = ui.futureExistOpen
+      ? `<div class="oneoffbar"><span>Schedule task:</span><select id="futTaskSel" style="flex:1">${taskOpts||'<option value="">(no tasks)</option>'}</select><button class="btn sm primary" id="futTaskAdd">Schedule</button><button class="btn sm" id="futTaskCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="futExistOpen">+ Schedule existing task</button></div>`;
+    footer = `<div class="addrow"><span class="plus">+</span><input id="futCapIn" type="text" placeholder="Add a new task for this day…" autocomplete="off"></div>${existingSel}${oneoff}`;
   }
 
   return `
@@ -644,12 +656,47 @@ function wireToday(){
   } else {
     const ooOpen = document.getElementById("ooOpen"); if (ooOpen) ooOpen.onclick = () => { ui.oneoffOpen = true; render(); };
   }
+  // Future date controls
+  const futCap = document.getElementById("futCapIn");
+  if (futCap) {
+    const doFutCap = async () => {
+      const v = futCap.value.trim(); if (!v) return;
+      const cid = store.containerOrder[0];
+      S = await api.add_task_to_date(v, cid, viewedKey(), curKey());
+      render();
+      const el = document.getElementById("futCapIn"); if (el) el.focus();
+    };
+    futCap.addEventListener("keydown", e => { if (e.key === "Enter") doFutCap(); });
+  }
+  if (document.getElementById("futOoOpen")) document.getElementById("futOoOpen").onclick = () => { ui.futureOneoffOpen = true; render(); };
+  if (document.getElementById("futOoCancel")) document.getElementById("futOoCancel").onclick = () => { ui.futureOneoffOpen = false; render(); };
+  if (document.getElementById("futOoCont")) document.getElementById("futOoCont").onchange = () => { ui.futureCont = Number(document.getElementById("futOoCont").value); render(); };
+  if (document.getElementById("futOoAdd")) document.getElementById("futOoAdd").onclick = () => {
+    const rid = document.getElementById("futOoSel").value; if (!rid) return;
+    ui.futureOneoffOpen = false; apply(api.add_one_off(rid, curKey(), viewedKey()));
+  };
+  if (document.getElementById("futExistOpen")) document.getElementById("futExistOpen").onclick = () => { ui.futureExistOpen = true; render(); };
+  if (document.getElementById("futTaskCancel")) document.getElementById("futTaskCancel").onclick = () => { ui.futureExistOpen = false; render(); };
+  if (document.getElementById("futTaskAdd")) document.getElementById("futTaskAdd").onclick = async () => {
+    const tid = document.getElementById("futTaskSel").value; if (!tid) return;
+    ui.futureExistOpen = false;
+    const result = await api.schedule_task_on_date(tid, viewedKey(), curKey());
+    if (result.conflict) {
+      const keep = confirm(`This task is already scheduled for ${result.conflict}.\n\nOK = keep that date too\nCancel = replace it`);
+      S = await api.confirm_schedule_task(tid, viewedKey(), keep, curKey());
+    } else {
+      S = result.state;
+    }
+    render();
+  };
   enableListReorder();
 }
 async function gotoDay(delta){
   ui.viewedDate = delta === 0 ? new Date(ui.currentDate.getTime())
                               : new Date(ui.viewedDate.getTime() + delta * 86400000);
   ui.oneoffOpen = false;
+  ui.futureOneoffOpen = false;
+  ui.futureExistOpen = false;
   S = await api.get_state(curKey(), viewedKey());
   render();
 }

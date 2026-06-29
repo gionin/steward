@@ -50,8 +50,8 @@
     return { id, name, status: status || "active", description: description || "", protected: !!protected_ };
   }
 
-  function makeTask(id, name, container_id, column, position, completed) {
-    return { id, name, container_id, column: column || "Ready", position: position || 0, completed: !!completed };
+  function makeTask(id, name, container_id, column, position, completed, ready_date) {
+    return { id, name, container_id, column: column || "Ready", position: position || 0, completed: !!completed, ready_date: ready_date || null };
   }
 
   function makeRoutine(id, name, container_id, days_of_week, time, duration_hours, active, archived) {
@@ -388,7 +388,30 @@
     s.remove_item = (item, date_key) => {
       const a = s.day_log[date_key];
       if (a) { const i = _indexOf(a, item); if (i >= 0) a.splice(i, 1); }
-      if (item.source_type === "task") s.recompute_task(item.source_id);
+      if (item.source_type === "task") {
+        const t = s.tasks[item.source_id];
+        if (t && t.ready_date === date_key) t.ready_date = null;
+        s.recompute_task(item.source_id);
+      }
+    };
+
+    s.promote_due_tasks = (today_key) => {
+      const toPromote = Object.values(s.tasks).filter(t => t.ready_date && t.ready_date <= today_key);
+      for (const t of toPromote) {
+        const sched = t.ready_date;
+        // backfill from sched through yesterday
+        let d = _dateFromKey(sched);
+        const yesterday = new Date(_dateFromKey(today_key).getTime() - 86400000);
+        while (d <= yesterday) {
+          const k = keyOf(d);
+          const day = s._day(k);
+          if (!day.some(it => it.source_type === "task" && it.source_id === t.id))
+            day.push(s.new_day_item("task", t.id, false, true));
+          d = new Date(d.getTime() + 86400000);
+        }
+        if (t.column !== "Ready") s.move_task(t.id, "Ready");
+        t.ready_date = null;
+      }
     };
 
     s.add_one_off = (routine_id, date_key, done) => {

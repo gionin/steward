@@ -51,15 +51,21 @@
     }
 
     function _futurePreview(view_key) {
-      return store.compute_routine_draft(_dateFromKey(view_key)).map(([_st, sid]) => {
+      const out = [];
+      const persistedIds = new Set();
+      for (const it of store.day_items(view_key)) {
+        out.push({ ..._resolveItem(it), scheduled: true });
+        persistedIds.add(`${it.source_type}:${it.source_id}`);
+      }
+      for (const [_st, sid] of store.compute_routine_draft(_dateFromKey(view_key))) {
+        if (persistedIds.has(`routine:${sid}`)) continue;
         const r = store.routines[sid];
-        if (!r) return null;
-        return {
-          id: `preview-${sid}`, sourceType: "routine", sourceId: sid,
+        if (!r) continue;
+        out.push({ id: `preview-${sid}`, sourceType: "routine", sourceId: sid,
           name: r.name, container: store.container_name(r.container_id),
-          containerId: r.container_id, done: false, oneOff: false, recurring: true, preview: true,
-        };
-      }).filter(Boolean);
+          containerId: r.container_id, done: false, oneOff: false, recurring: true, preview: true });
+      }
+      return out;
     }
 
     function _buildSnapshot(today_key, viewed_key) {
@@ -122,7 +128,7 @@
       }));
 
       const tasksAll = Object.values(store.tasks).map(t => ({
-        id: t.id, name: t.name, containerId: t.container_id, completed: t.completed,
+        id: t.id, name: t.name, containerId: t.container_id, completed: t.completed, readyDate: t.ready_date || null,
       }));
 
       return {
@@ -134,6 +140,7 @@
     }
 
     async function _snap(today_key, viewed_key) {
+      store.promote_due_tasks(today_key);
       store.sync_day(_dateFromKey(today_key)); // only live day re-syncs
       const snap = _buildSnapshot(today_key, viewed_key);
       await _saveAndPersist();
@@ -345,9 +352,48 @@
         return _snap(today_key);
       },
 
-      async add_one_off(routine_id, today_key) {
-        store.add_one_off(parseInt(routine_id, 10), today_key);
-        return _snap(today_key);
+      async add_one_off(routine_id, today_key, date_key) {
+        store.add_one_off(parseInt(routine_id, 10), date_key || today_key);
+        return _snap(today_key, date_key || today_key);
+      },
+
+      async add_task_to_date(name, container_id, date_key, today_key) {
+        name = (name || "").trim();
+        if (!name) return _snap(today_key, date_key);
+        const t = store.add_task(name, parseInt(container_id, 10), "Soon");
+        t.ready_date = date_key;
+        store._day(date_key).push(store.new_day_item("task", t.id, false, true));
+        return _snap(today_key, date_key);
+      },
+
+      async schedule_task_on_date(task_id, date_key, today_key) {
+        const t = store.tasks[parseInt(task_id, 10)];
+        if (!t) return { conflict: null, state: await _snap(today_key, date_key) };
+        if (t.ready_date && t.ready_date !== date_key)
+          return { conflict: t.ready_date, state: await _snap(today_key, date_key) };
+        if (t.column === "Ready") store.move_task(t.id, "Soon");
+        t.ready_date = date_key;
+        const day = store._day(date_key);
+        if (!day.some(it => it.source_type === "task" && it.source_id === t.id))
+          day.push(store.new_day_item("task", t.id, false, true));
+        return { conflict: null, state: await _snap(today_key, date_key) };
+      },
+
+      async confirm_schedule_task(task_id, date_key, keep_old, today_key) {
+        const t = store.tasks[parseInt(task_id, 10)];
+        if (!t) return _snap(today_key, date_key);
+        const old_date = t.ready_date;
+        if (!keep_old && old_date) {
+          store.day_log[old_date] = (store.day_log[old_date] || []).filter(
+            it => !(it.source_type === "task" && it.source_id === t.id)
+          );
+        }
+        if (t.column === "Ready") store.move_task(t.id, "Soon");
+        t.ready_date = (keep_old && old_date) ? (old_date < date_key ? old_date : date_key) : date_key;
+        const day = store._day(date_key);
+        if (!day.some(it => it.source_type === "task" && it.source_id === t.id))
+          day.push(store.new_day_item("task", t.id, false, true));
+        return _snap(today_key, date_key);
       },
 
       // Containers

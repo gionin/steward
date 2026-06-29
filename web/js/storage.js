@@ -85,7 +85,11 @@
     }
   }
 
-  const _MIGRATIONS = [_migrationToV1, _migrationToV2];
+  function _migrationToV3(db) {
+    db.run("ALTER TABLE tasks ADD COLUMN ready_date TEXT");
+  }
+
+  const _MIGRATIONS = [_migrationToV1, _migrationToV2, _migrationToV3];
 
   function applyMigrations(db) {
     const current = _getVersion(db);
@@ -116,7 +120,7 @@
       const cols = tasks[0].columns;
       for (const row of tasks[0].values) {
         const r = Object.fromEntries(cols.map((c, i) => [c, row[i]]));
-        store.tasks[r.id] = { id: r.id, name: r.name, container_id: r.container_id, column: r.col, position: r.position, completed: !!r.completed };
+        store.tasks[r.id] = { id: r.id, name: r.name, container_id: r.container_id, column: r.col, position: r.position, completed: !!r.completed, ready_date: r.ready_date || null };
       }
     }
 
@@ -181,8 +185,8 @@
 
       for (const t of Object.values(store.tasks)) {
         db.run(
-          "INSERT INTO tasks(id,name,container_id,col,position,completed) VALUES(?,?,?,?,?,?)",
-          [t.id, t.name, t.container_id, t.column, t.position, t.completed ? 1 : 0]
+          "INSERT INTO tasks(id,name,container_id,col,position,completed,ready_date) VALUES(?,?,?,?,?,?,?)",
+          [t.id, t.name, t.container_id, t.column, t.position, t.completed ? 1 : 0, t.ready_date || null]
         );
       }
 

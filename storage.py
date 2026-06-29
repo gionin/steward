@@ -115,8 +115,12 @@ def _migration_to_v2(conn):
             )
 
 
+def _migration_to_v3(conn):
+    conn.execute("ALTER TABLE tasks ADD COLUMN ready_date TEXT")
+
+
 # Index i applies the upgrade to version i+1.
-_MIGRATIONS = [_migration_to_v1, _migration_to_v2]
+_MIGRATIONS = [_migration_to_v1, _migration_to_v2, _migration_to_v3]
 SCHEMA_VERSION = len(_MIGRATIONS)
 
 
@@ -146,6 +150,7 @@ def load(conn) -> Store:
         store.tasks[r["id"]] = Task(
             id=r["id"], name=r["name"], container_id=r["container_id"],
             column=r["col"], position=r["position"], completed=bool(r["completed"]),
+            ready_date=r["ready_date"] or None,
         )
 
     for r in conn.execute("SELECT * FROM routines ORDER BY ord, id"):
@@ -196,9 +201,9 @@ def save(store: Store, conn):
 
         for t in store.tasks.values():
             cur.execute(
-                "INSERT INTO tasks(id,name,container_id,col,position,completed) "
-                "VALUES(?,?,?,?,?,?)",
-                (t.id, t.name, t.container_id, t.column, t.position, int(t.completed)),
+                "INSERT INTO tasks(id,name,container_id,col,position,completed,ready_date) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (t.id, t.name, t.container_id, t.column, t.position, int(t.completed), t.ready_date),
             )
 
         ordered_rids = store.routine_order + [rid for rid in store.routines

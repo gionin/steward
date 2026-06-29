@@ -111,12 +111,16 @@ class Api:
         }
 
     def _future_preview(self, view_key):
-        """A future day shows its scheduled routines only, derived live and NOT
-        persisted: the schedule paints the future, it is never frozen there.
-        These rows are read-only previews (no real day-log id)."""
         s = self.store
         out = []
+        # First: persisted items (manually scheduled tasks + one-off routines)
+        for it in s.day_items(view_key):
+            out.append({**self._resolve_item(it), "scheduled": True})
+        # Then: routine previews not already in the persisted list
+        persisted_ids = {(it.source_type, it.source_id) for it in s.day_items(view_key)}
         for (_st, sid) in s.compute_routine_draft(_date_from_key(view_key)):
+            if ("routine", sid) in persisted_ids:
+                continue
             r = s.routines.get(sid)
             if not r:
                 continue
@@ -132,6 +136,7 @@ class Api:
         s = self.store
         live = today_key                 # the real current day (the client sends it)
         view = viewed_key or today_key   # the day the Today lens is showing
+        s.promote_due_tasks(live)          # promote any tasks whose ready_date has arrived
         s.sync_day(_date_from_key(live))  # only the live day ever re-syncs
         self._save()                      # persist the freshly synced live day
 
@@ -187,7 +192,7 @@ class Api:
         } for k in hist_keys]
 
         tasks_all = [{"id": t.id, "name": t.name, "containerId": t.container_id,
-                      "completed": t.completed} for t in s.tasks.values()]
+                      "completed": t.completed, "readyDate": t.ready_date} for t in s.tasks.values()]
 
         return {
             "version": APP_VERSION,
@@ -366,9 +371,53 @@ class Api:
         self.store.reorder_routine(routine_id, container_id, int(idx))
         return self._snapshot(today_key)
 
-    def add_one_off(self, routine_id, today_key):
-        self.store.add_one_off(int(routine_id), today_key)
+    def add_one_off(self, routine_id, today_key, date_key=None):
+        target = date_key or today_key
+        self.store.add_one_off(int(routine_id), target)
         return self._snapshot(today_key)
+
+    def add_task_to_date(self, name, container_id, date_key, today_key):
+        name = (name or "").strip()
+        if not name:
+            return self._snapshot(today_key)
+        t = self.store.add_task(name, int(container_id), "Soon")
+        t.ready_date = date_key
+        self.store._day(date_key).append(self.store.new_day_item("task", t.id, False, True))
+        return self._snapshot(today_key, date_key)
+
+    def schedule_task_on_date(self, task_id, date_key, today_key):
+        t = self.store.tasks.get(int(task_id))
+        if not t:
+            return {"conflict": None, "state": self._snapshot(today_key, date_key)}
+        if t.ready_date and t.ready_date != date_key:
+            return {"conflict": t.ready_date, "state": self._snapshot(today_key, date_key)}
+        # No conflict: schedule it
+        if t.column == "Ready":
+            self.store.move_task(t.id, "Soon")
+        t.ready_date = date_key
+        day = self.store._day(date_key)
+        if not any(it.source_type == "task" and it.source_id == t.id for it in day):
+            day.append(self.store.new_day_item("task", t.id, False, True))
+        return {"conflict": None, "state": self._snapshot(today_key, date_key)}
+
+    def confirm_schedule_task(self, task_id, date_key, keep_old, today_key):
+        t = self.store.tasks.get(int(task_id))
+        if not t:
+            return self._snapshot(today_key, date_key)
+        old_date = t.ready_date
+        if not keep_old and old_date:
+            # remove old DayItem
+            old_day = self.store.day_log.get(old_date, [])
+            self.store.day_log[old_date] = [it for it in old_day
+                if not (it.source_type == "task" and it.source_id == t.id)]
+        # schedule on new date
+        if t.column == "Ready":
+            self.store.move_task(t.id, "Soon")
+        t.ready_date = min(old_date, date_key) if keep_old and old_date else date_key
+        day = self.store._day(date_key)
+        if not any(it.source_type == "task" and it.source_id == t.id for it in day):
+            day.append(self.store.new_day_item("task", t.id, False, True))
+        return self._snapshot(today_key, date_key)
 
     # ----- Containers -----
 

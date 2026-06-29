@@ -82,6 +82,7 @@ class Task:
     column: str = "Ready"
     position: int = 0
     completed: bool = False
+    ready_date: Optional[str] = None
 
 
 @dataclass
@@ -469,7 +470,30 @@ class Store:
             if i >= 0:
                 del a[i]
         if item.source_type == "task":
+            t = self.tasks.get(item.source_id)
+            if t and t.ready_date == date_key:
+                t.ready_date = None
             self.recompute_task(item.source_id)
+
+    def promote_due_tasks(self, today_key: str):
+        from datetime import date as _date, timedelta
+        def _dk(k): y,m,d2 = (int(x) for x in k.split("-")); return _date(y,m,d2)
+        to_promote = [t for t in self.tasks.values() if t.ready_date and t.ready_date <= today_key]
+        for t in to_promote:
+            sched = t.ready_date
+            # backfill day_log from sched through yesterday (today handled by sync_day)
+            d = _dk(sched)
+            yesterday = _dk(today_key) - timedelta(days=1)
+            while d <= yesterday:
+                k = key_of(d)
+                day = self._day(k)
+                if not any(it.source_type == "task" and it.source_id == t.id for it in day):
+                    day.append(self.new_day_item("task", t.id, False, True))
+                d += timedelta(days=1)
+            # promote to Ready if not already there
+            if t.column != "Ready":
+                self.move_task(t.id, "Ready")
+            t.ready_date = None
 
     def add_one_off(self, routine_id, date_key, done=False):
         routine_id = self._coerce_id(routine_id)
