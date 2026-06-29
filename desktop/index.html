@@ -279,10 +279,10 @@ const weekdayMon = d => (d.getDay() + 6) % 7;
 
 const ui = {
   view: "today", taskScope: "all", routineScope: "all",
-  currentDate: new Date(),   // the live day (real today); never moved by navigation
+  currentDate: new Date(),   // effective today (shifted by dayStartHour); never moved by navigation
   viewedDate: new Date(),    // the day the checklist lens is showing
   calDate: new Date(),       // any day in the month the calendar is showing
-  settings: { theme: "dark", showPos: false },
+  settings: { theme: "dark", showPos: false, dayStartHour: 0 },
   histForm: false, histKind: "task", histNew: false,
   lfCont: null, lfRCont: null, ooCont: null, oneoffOpen: false,
 };
@@ -291,7 +291,13 @@ function localKey(d){
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
-const curKey = () => localKey(ui.currentDate);     // the live day (sent as today_key everywhere)
+// Returns the "effective today" date, shifted back by dayStartHour so that e.g.
+// 2 am with a 4 am day-start is still treated as the previous calendar day.
+function effectiveToday(){
+  const h = ui.settings.dayStartHour || 0;
+  return new Date(Date.now() - h * 3600000);
+}
+const curKey = () => localKey(effectiveToday());   // the live day (sent as today_key everywhere)
 const viewedKey = () => localKey(ui.viewedDate);   // the day the Today lens is showing
 
 const NAV = [["today","◷","Checklist"],["tasks","▦","Tasks"],["routines","↻","Routines"],["containers","◰","Containers"],["history","≣","Calendar"]];
@@ -560,12 +566,16 @@ function logForm(){
 
 /* ---------- Settings ---------- */
 function viewSettings(){
-  const t = ui.settings.theme, sp = ui.settings.showPos;
+  const t = ui.settings.theme, sp = ui.settings.showPos, dsh = ui.settings.dayStartHour;
+  const hourOpts = [0,1,2,3,4,5,6].map(h => `<option value="${h}" ${h===dsh?"selected":""}>${h===0?"Midnight (default)":`${h}:00 am`}</option>`).join("");
   return `<div class="head"><div><div class="eyebrow">Preferences</div><h1 class="htitle">Settings</h1></div></div>
     <div class="sset">
       <div class="ssection">Appearance</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Theme</div><div class="desc">Dark is the default.</div></div>
         <div class="seg"><button class="${t==="dark"?"on":""}" data-theme="dark">Dark</button><button class="${t==="light"?"on":""}" data-theme="light">Light</button></div></div></div>
+      <div class="ssection">Time</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">New day starts at</div><div class="desc">Hours before this time are still counted as the previous day. Useful for night owls — e.g. set to 4 am if you stay up past midnight.</div></div>
+        <select id="dayStartSel" class="selp">${hourOpts}</select></div></div>
       <div class="ssection">Display</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Show task positions in a single container</div>
         <div class="desc">When viewing one container's board, show each task's global position number. Off keeps it calmer.</div></div>
@@ -851,6 +861,14 @@ function wireHistory(){
 function wireSettings(){
   document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
   document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
+  const dss = document.getElementById("dayStartSel");
+  if (dss) dss.onchange = async () => {
+    ui.settings.dayStartHour = parseInt(dss.value, 10);
+    const t = effectiveToday();
+    ui.currentDate = t; ui.viewedDate = new Date(t.getTime());
+    S = await api.get_state(curKey(), viewedKey());
+    render();
+  };
   const pathEl = document.getElementById("dataPath");
   if (pathEl) api.data_location().then(d => { pathEl.textContent = (d && d.dbPath) || "(in memory)"; });
   const ofb = document.getElementById("openFolderBtn"); if (ofb) ofb.onclick = () => api.open_data_folder();
