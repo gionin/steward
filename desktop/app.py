@@ -398,6 +398,13 @@ class Api:
         ok = self.store.delete_container(int(container_id))
         return {"ok": ok, "state": self._snapshot(today_key)}
 
+    def rename_container(self, container_id, name, today_key):
+        name = (name or "").strip()
+        c = self.store.containers.get(int(container_id))
+        if c and name:
+            c.name = name
+        return self._snapshot(today_key)
+
     # ----- data location / backup (item 16) -----
 
     def data_location(self):

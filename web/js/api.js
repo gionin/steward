@@ -375,6 +375,13 @@
         return { ok, state: await _snap(today_key) };
       },
 
+      async rename_container(container_id, name, today_key) {
+        name = (name || "").trim();
+        const c = store.containers[parseInt(container_id, 10)];
+        if (c && name) c.name = name;
+        return _snap(today_key);
+      },
+
       // History
       async history_toggle(item_id, date_key, today_key) {
         const it = _findItemIn(date_key, item_id);

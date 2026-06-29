@@ -481,7 +481,7 @@ function viewContainers(){
     const cs = store.orderedContainers(st);
     const rows = cs.map(c => {
       const mark = c.protected ? `<span class="protmark" title="Protected — can't be deleted">⚓</span>` : "";
-      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname">${esc(c.name)}</span>${mark}
+      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname" data-crename="${c.id}" title="click to rename">${esc(c.name)}</span>${mark}
         <span class="ccount">${c.taskCount} tasks · ${c.routineCount} routines</span></div>${c.protected?"":`<button class="iconbtn del" data-cdel="${c.id}" title="delete area">✕</button>`}</div>`;
     }).join("");
     const add = `<div class="raddrow"><button class="raddbtn" data-cadd="${st}">+ add container</button></div>`;
@@ -765,7 +765,17 @@ function startDurEdit(el){
 function wireContainers(){
   document.querySelectorAll("[data-cadd]").forEach(b => b.onclick = () => startAddContainer(b));
   document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => deleteContainerPrompt(b.dataset.cdel));
+  document.querySelectorAll("[data-crename]").forEach(el => el.onclick = e => { e.stopPropagation(); startRenameContainer(el); });
   enableContainerDnD();
+}
+function startRenameContainer(el){
+  const id = el.dataset.crename, c = store.containers[id]; if (!c) return;
+  const crow = el.closest(".crow"); if (crow) crow.draggable = false;
+  const inp = mkInput(c.name); el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v && v !== c.name) apply(api.rename_container(id, v, curKey())); else render(); if (crow) crow.draggable = true; };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { done = true; render(); } });
+  inp.addEventListener("blur", commit);
 }
 function startAddContainer(btn){
   const st = btn.dataset.cadd || "active";
