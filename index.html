@@ -279,19 +279,26 @@ const weekdayMon = d => (d.getDay() + 6) % 7;
 
 const ui = {
   view: "today", taskScope: "all", routineScope: "all",
-  currentDate: new Date(),   // the live day (real today); never moved by navigation
+  currentDate: new Date(),   // effective today (shifted by dayStartHour); never moved by navigation
   viewedDate: new Date(),    // the day the checklist lens is showing
   calDate: new Date(),       // any day in the month the calendar is showing
-  settings: { theme: "dark", showPos: false },
+  settings: { theme: "dark", showPos: false, dayStartTime: "00:00" },
   histForm: false, histKind: "task", histNew: false,
   lfCont: null, lfRCont: null, ooCont: null, oneoffOpen: false,
+  futureCont: null, futureOneoffOpen: false, futureExistOpen: false,
 };
 
 function localKey(d){
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
-const curKey = () => localKey(ui.currentDate);     // the live day (sent as today_key everywhere)
+// Returns the "effective today" date, shifted back by dayStartTime so that e.g.
+// 2:30 am with a 4:00 am day-start is still treated as the previous calendar day.
+function effectiveToday(){
+  const [hh, mm] = (ui.settings.dayStartTime || "00:00").split(":").map(Number);
+  return new Date(Date.now() - (hh * 60 + mm) * 60000);
+}
+const curKey = () => localKey(effectiveToday());   // the live day (sent as today_key everywhere)
 const viewedKey = () => localKey(ui.viewedDate);   // the day the Today lens is showing
 
 const NAV = [["today","◷","Checklist"],["tasks","▦","Tasks"],["routines","↻","Routines"],["containers","◰","Containers"],["history","≣","Calendar"]];
@@ -354,10 +361,11 @@ function viewToday(){
       <span class="cbox ${done?"done":""}" data-check="${it.id}">${done?"✓":""}</span>
       <span class="tname" data-tname="${it.id}">${esc(it.name)}</span>
       <span class="meta">${it.oneOff&&it.sourceType==="routine"?'<span class="tag">one-off</span>':""}${it.recurring?'<span class="recur" title="routine">↻</span>':""}<span class="chip cont" data-tcont="${it.id}">${esc(it.container)}</span></span>
+      <button class="hdel" data-delitem="${it.id}" title="Remove from today">×</button>
     </div>`;
   }).join("");
 
-  const emptyMsg = isFuture ? "No routines scheduled for this day."
+  const emptyMsg = isFuture ? "Nothing scheduled for this day yet."
     : isPast ? "Nothing was tracked on this day."
     : "Nothing drafted for today. Add something below, or enjoy the quiet.";
   const body = items.length ? `<div class="list" id="todayList">${rows}</div>` : `<div class="empty">${emptyMsg}</div>`;
@@ -370,7 +378,7 @@ function viewToday(){
       ${isLive ? "" : `<button class="btn sm" id="dayToday">Jump to today</button>`}
     </div>`;
 
-  const note = isFuture ? "Scheduled ahead — the routines enabled for this day. You'll check things off when it arrives."
+  const note = isFuture ? `${items.filter(i=>!i.preview).length} scheduled · routines shown as preview`
     : isPast ? `${items.length} on record for this day.`
     : `${items.length} drafted · ${S.heldCount} held in other columns`;
 
@@ -384,6 +392,17 @@ function viewToday(){
     footer = `<div class="addrow"><span class="plus">+</span><input id="capIn" type="text" placeholder="Add a task for today…" autocomplete="off"></div>${oneoff}`;
   } else if (isPast) {
     footer = `<div class="oneoffbar"><button class="btn sm" id="backfillBtn">↻ Pull in this day's scheduled routines</button></div>`;
+  } else if (isFuture) {
+    const futureCid = (ui.futureCont && store.containers[ui.futureCont]) ? ui.futureCont : store.containerOrder[0];
+    const futureROpts = liveRoutines().filter(r => r.containerId === futureCid).map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    const taskOpts = S.tasksAll.filter(t => !t.completed).sort((a,b) => a.name.localeCompare(b.name)).map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join("");
+    const oneoff = ui.futureOneoffOpen
+      ? `<div class="oneoffbar"><span>One-off:</span><select id="futOoCont">${contOptions(futureCid)}</select><select id="futOoSel" style="flex:1">${futureROpts||'<option value="">(none here)</option>'}</select><button class="btn sm primary" id="futOoAdd">Add</button><button class="btn sm" id="futOoCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="futOoOpen">↻ Add a one-off routine</button></div>`;
+    const existingSel = ui.futureExistOpen
+      ? `<div class="oneoffbar"><span>Schedule task:</span><select id="futTaskSel" style="flex:1">${taskOpts||'<option value="">(no tasks)</option>'}</select><button class="btn sm primary" id="futTaskAdd">Schedule</button><button class="btn sm" id="futTaskCancel">Cancel</button></div>`
+      : `<div class="oneoffbar"><button class="btn sm" id="futExistOpen">+ Schedule existing task</button></div>`;
+    footer = `<div class="addrow"><span class="plus">+</span><input id="futCapIn" type="text" placeholder="Add a new task for this day…" autocomplete="off"></div>${existingSel}${oneoff}`;
   }
 
   return `
@@ -480,7 +499,7 @@ function viewContainers(){
     const cs = store.orderedContainers(st);
     const rows = cs.map(c => {
       const mark = c.protected ? `<span class="protmark" title="Protected — can't be deleted">⚓</span>` : "";
-      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname">${esc(c.name)}</span>${mark}
+      return `<div class="crow" draggable="true" data-cont="${c.id}"><div class="cinfo"><span class="grip" data-cgrip="${c.id}" title="drag to reorder or restatus">⋮⋮</span><span class="dot ${st!=="active"?st:""}"></span><span class="cname" data-crename="${c.id}" title="click to rename">${esc(c.name)}</span>${mark}
         <span class="ccount">${c.taskCount} tasks · ${c.routineCount} routines</span></div>${c.protected?"":`<button class="iconbtn del" data-cdel="${c.id}" title="delete area">✕</button>`}</div>`;
     }).join("");
     const add = `<div class="raddrow"><button class="raddbtn" data-cadd="${st}">+ add container</button></div>`;
@@ -559,12 +578,15 @@ function logForm(){
 
 /* ---------- Settings ---------- */
 function viewSettings(){
-  const t = ui.settings.theme, sp = ui.settings.showPos;
+  const t = ui.settings.theme, sp = ui.settings.showPos, dst = ui.settings.dayStartTime || "00:00";
   return `<div class="head"><div><div class="eyebrow">Preferences</div><h1 class="htitle">Settings</h1></div></div>
     <div class="sset">
       <div class="ssection">Appearance</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Theme</div><div class="desc">Dark is the default.</div></div>
         <div class="seg"><button class="${t==="dark"?"on":""}" data-theme="dark">Dark</button><button class="${t==="light"?"on":""}" data-theme="light">Light</button></div></div></div>
+      <div class="ssection">Time</div>
+      <div class="scard"><div class="srow"><div><div class="lbl">New day starts at</div><div class="desc">Times before this are still counted as the previous day. Useful for night owls — e.g. set to 04:00 if you stay up past midnight.</div></div>
+        <input type="time" id="dayStartSel" class="selp" value="${dst}"></div></div>
       <div class="ssection">Display</div>
       <div class="scard"><div class="srow"><div><div class="lbl">Show task positions in a single container</div>
         <div class="desc">When viewing one container's board, show each task's global position number. Off keeps it calmer.</div></div>
@@ -626,6 +648,7 @@ function wireToday(){
   document.querySelectorAll("[data-check]").forEach(el => el.onclick = () => apply(api.toggle_today_item(el.dataset.check, curKey(), viewedKey())));
   document.querySelectorAll("[data-tname]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tname); if (!x || x.done) return; editItemName(el, x); });
   document.querySelectorAll("[data-tcont]").forEach(el => el.onclick = () => { const x = findToday(el.dataset.tcont); if (!x) return; editItemContainer(el, x); });
+  document.querySelectorAll("[data-delitem]").forEach(el => el.onclick = e => { e.stopPropagation(); apply(api.remove_item(el.dataset.delitem, viewedKey(), curKey())); });
   if (ui.oneoffOpen) {
     const oc = document.getElementById("ooCont"); if (oc) oc.onchange = () => { ui.ooCont = Number(oc.value); render(); };
     const ooAdd = document.getElementById("ooAdd"); if (ooAdd) ooAdd.onclick = () => { const rid = document.getElementById("ooSel").value; if (rid) { ui.oneoffOpen = false; apply(api.add_one_off(rid, curKey())); } };
@@ -633,12 +656,47 @@ function wireToday(){
   } else {
     const ooOpen = document.getElementById("ooOpen"); if (ooOpen) ooOpen.onclick = () => { ui.oneoffOpen = true; render(); };
   }
+  // Future date controls
+  const futCap = document.getElementById("futCapIn");
+  if (futCap) {
+    const doFutCap = async () => {
+      const v = futCap.value.trim(); if (!v) return;
+      const cid = store.containerOrder[0];
+      S = await api.add_task_to_date(v, cid, viewedKey(), curKey());
+      render();
+      const el = document.getElementById("futCapIn"); if (el) el.focus();
+    };
+    futCap.addEventListener("keydown", e => { if (e.key === "Enter") doFutCap(); });
+  }
+  if (document.getElementById("futOoOpen")) document.getElementById("futOoOpen").onclick = () => { ui.futureOneoffOpen = true; render(); };
+  if (document.getElementById("futOoCancel")) document.getElementById("futOoCancel").onclick = () => { ui.futureOneoffOpen = false; render(); };
+  if (document.getElementById("futOoCont")) document.getElementById("futOoCont").onchange = () => { ui.futureCont = Number(document.getElementById("futOoCont").value); render(); };
+  if (document.getElementById("futOoAdd")) document.getElementById("futOoAdd").onclick = () => {
+    const rid = document.getElementById("futOoSel").value; if (!rid) return;
+    ui.futureOneoffOpen = false; apply(api.add_one_off(rid, curKey(), viewedKey()));
+  };
+  if (document.getElementById("futExistOpen")) document.getElementById("futExistOpen").onclick = () => { ui.futureExistOpen = true; render(); };
+  if (document.getElementById("futTaskCancel")) document.getElementById("futTaskCancel").onclick = () => { ui.futureExistOpen = false; render(); };
+  if (document.getElementById("futTaskAdd")) document.getElementById("futTaskAdd").onclick = async () => {
+    const tid = document.getElementById("futTaskSel").value; if (!tid) return;
+    ui.futureExistOpen = false;
+    const result = await api.schedule_task_on_date(tid, viewedKey(), curKey());
+    if (result.conflict) {
+      const keep = confirm(`This task is already scheduled for ${result.conflict}.\n\nOK = keep that date too\nCancel = replace it`);
+      S = await api.confirm_schedule_task(tid, viewedKey(), keep, curKey());
+    } else {
+      S = result.state;
+    }
+    render();
+  };
   enableListReorder();
 }
 async function gotoDay(delta){
   ui.viewedDate = delta === 0 ? new Date(ui.currentDate.getTime())
                               : new Date(ui.viewedDate.getTime() + delta * 86400000);
   ui.oneoffOpen = false;
+  ui.futureOneoffOpen = false;
+  ui.futureExistOpen = false;
   S = await api.get_state(curKey(), viewedKey());
   render();
 }
@@ -763,7 +821,17 @@ function startDurEdit(el){
 function wireContainers(){
   document.querySelectorAll("[data-cadd]").forEach(b => b.onclick = () => startAddContainer(b));
   document.querySelectorAll("[data-cdel]").forEach(b => b.onclick = () => deleteContainerPrompt(b.dataset.cdel));
+  document.querySelectorAll("[data-crename]").forEach(el => el.onclick = e => { e.stopPropagation(); startRenameContainer(el); });
   enableContainerDnD();
+}
+function startRenameContainer(el){
+  const id = el.dataset.crename, c = store.containers[id]; if (!c) return;
+  const crow = el.closest(".crow"); if (crow) crow.draggable = false;
+  const inp = mkInput(c.name); el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const commit = () => { if (done) return; done = true; const v = inp.value.trim(); if (v && v !== c.name) apply(api.rename_container(id, v, curKey())); else render(); if (crow) crow.draggable = true; };
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { done = true; render(); } });
+  inp.addEventListener("blur", commit);
 }
 function startAddContainer(btn){
   const st = btn.dataset.cadd || "active";
@@ -839,6 +907,14 @@ function wireHistory(){
 function wireSettings(){
   document.querySelectorAll("[data-theme]").forEach(b => b.onclick = () => { ui.settings.theme = b.dataset.theme; applyTheme(); render(); });
   document.getElementById("posToggle").onclick = () => { ui.settings.showPos = !ui.settings.showPos; render(); };
+  const dss = document.getElementById("dayStartSel");
+  if (dss) dss.onchange = async () => {
+    if (dss.value) ui.settings.dayStartTime = dss.value;
+    const t = effectiveToday();
+    ui.currentDate = t; ui.viewedDate = new Date(t.getTime());
+    S = await api.get_state(curKey(), viewedKey());
+    render();
+  };
   const pathEl = document.getElementById("dataPath");
   if (pathEl) api.data_location().then(d => { pathEl.textContent = (d && d.dbPath) || "(in memory)"; });
   const ofb = document.getElementById("openFolderBtn"); if (ofb) ofb.onclick = () => api.open_data_folder();
